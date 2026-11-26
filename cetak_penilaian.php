@@ -96,7 +96,7 @@ ob_start();
             'Unit Kerja' => $pen['unit_kerja'] ?? '-',
             'Nama Kepala Madrasah' => $s['kepala_nama'] ?: '-',
             'NIP Kepala' => $s['kepala_nip'] ?: '-',
-            'Tahun Penilaian' => (string)($s['tahun_' . $tahun] ?: '-'),
+            'Tahun Penilaian' => tahun_penilaian_tampil($sid, $s, (int)$tahun) ?: '-',
             'Tanggal Penilaian' => tanggal_id($tgl) ?: '-',
             'Tempat' => $tempat !== '' ? $tempat : '-',
         ]) ?>

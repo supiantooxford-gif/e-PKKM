@@ -137,6 +137,30 @@ if (!function_exists('jabatan_penilai_pemakai')) {
 // 2. PENDAFTARAN PENILAI
 // ============================================================================
 
+if (!function_exists('jabatan_pengawas_nama')) {
+    /**
+     * Apakah NAMA JABATAN termasuk jabatan pengawas (diawali "pengawas")?
+     *
+     * Sejak v1.11.0 (permintaan pemilik) jabatan pengawas TIDAK mendaftar sendiri di
+     * `daftar_penilai.php` — akun pengawas ditarik Super Admin dari aplikasi Supervisi.
+     */
+    function jabatan_pengawas_nama(string $nama): bool
+    {
+        return str_starts_with(strtolower(trim($nama)), 'pengawas');
+    }
+}
+
+if (!function_exists('jabatan_penilai_daftar_list')) {
+    /** Jabatan yang boleh dipilih pada halaman PENDAFTARAN penilai (semua kecuali pengawas). */
+    function jabatan_penilai_daftar_list(): array
+    {
+        return array_values(array_filter(
+            jabatan_penilai_list(true),
+            fn($j) => !jabatan_pengawas_nama((string)$j['nama'])
+        ));
+    }
+}
+
 if (!function_exists('penilai_medan_daftar')) {
     /** Medan pendaftaran penilai: nama field => label tampilan. */
     function penilai_medan_daftar(): array
@@ -202,6 +226,13 @@ if (!function_exists('penilai_simpan_daftar')) {
         if ($jabatan === '' || !jabatan_penilai_sah($jabatan)) {
             return ['ok' => false, 'id' => 0,
                 'pesan' => 'Jabatan wajib dipilih dari daftar yang tersedia.'];
+        }
+        if (jabatan_pengawas_nama($jabatan)) {
+            // Permintaan pemilik v1.11.0: hanya jabatan SELAIN pengawas yang mendaftar sendiri;
+            // akun pengawas + penugasannya ditarik Super Admin dari aplikasi Supervisi.
+            return ['ok' => false, 'id' => 0,
+                'pesan' => 'Jabatan pengawas tidak mendaftar di sini — akun pengawas ditarik Super Admin '
+                    . 'dari aplikasi Supervisi. Silakan pilih jabatan lain atau hubungi Super Admin aplikasi.'];
         }
         if (!daftar_username_sah($username)) {
             return ['ok' => false, 'id' => 0,
@@ -1055,5 +1086,340 @@ if (!function_exists('penilai_tanggal_ada')) {
     function penilai_tanggal_ada(int $sekolahId, string $kategori, string $kode, int $tahun): bool
     {
         return penilai_tanggal($sekolahId, $kategori, $kode, $tahun) !== '';
+    }
+}
+
+if (!function_exists('tahun_penilaian_tampil')) {
+    /**
+     * TAHUN PENILAIAN yang ditampilkan/dicetak untuk satu tahun PKKM ('' bila belum dapat diketahui).
+     *
+     * v1.18.0 — permintaan pemilik: kolom "Tahun penilaian" pada lembar penilaian masih "-" padahal
+     * penilai sudah mengisi TANGGAL MENILAI. Sebabnya: `sekolah.tahun_1..4` hanya diisi Super Admin
+     * lewat Input Data Madrasah dan pada data live masih kosong. Sejak versi ini tahun penilaian
+     * diturunkan dari TANGGAL MENILAI tahun itu (angka tahun pada tanggal), sehingga tidak perlu
+     * diisi dua kali. Urutan sumber:
+     *   1. `sekolah.tahun_<n>` — isian Super Admin SELALU menang (jangan ditimpa),
+     *   2. tanggal menilai Pengawas I (Ketua Tim) pada kolom `penilai.tanggal_<n>`,
+     *   3. tanggal menilai penilai lain (Pengawas II / penilai tambahan) pada kolom yang sama,
+     *   4. tanggal penilaian pada data madrasah `sekolah.tanggal_<n>`.
+     * Semua kosong → '' (tampil "-").
+     */
+    function tahun_penilaian_tampil(int $sekolahId, array $s, int $tahun): string
+    {
+        static $memo = [];
+        $tahun = (int)$tahun;
+        if (!array_key_exists($tahun, PKKM_TAHUN_LIST)) {
+            return '';
+        }
+        $kunci = $sekolahId . ':' . $tahun;
+        if (array_key_exists($kunci, $memo)) {
+            return $memo[$kunci];
+        }
+        // 1. isian Super Admin (data madrasah) — dipakai apa adanya
+        $simpan = trim((string)($s['tahun_' . $tahun] ?? ''));
+        if ($simpan !== '' && (int)$simpan > 0) {
+            return $memo[$kunci] = (string)(int)$simpan;
+        }
+        // 2 & 3. angka tahun dari tanggal menilai para penilai (Pengawas I lebih dulu)
+        $kolom = penilai_tanggal_kolom($tahun);
+        $angka = '';
+        if ($sekolahId > 0) {
+            $baris = all('SELECT kategori, kode, ' . $kolom . ' AS tgl FROM penilai
+                          WHERE sekolah_id = ? AND ' . $kolom . " IS NOT NULL AND TRIM(" . $kolom . ") <> ''", [$sekolahId]);
+            usort($baris, static function (array $a, array $b): int {
+                $pa = (($a['kategori'] ?? '') === 'pengawas' && (string)($a['kode'] ?? '') === '1') ? 0 : 1;
+                $pb = (($b['kategori'] ?? '') === 'pengawas' && (string)($b['kode'] ?? '') === '1') ? 0 : 1;
+                return $pa <=> $pb;
+            });
+            foreach ($baris as $b) {
+                $angka = tahun_penilaian_dari_tanggal((string)($b['tgl'] ?? ''));
+                if ($angka !== '') {
+                    break;
+                }
+            }
+        }
+        // 4. cadangan: tanggal penilaian pada data madrasah
+        if ($angka === '') {
+            $angka = tahun_penilaian_dari_tanggal((string)($s['tanggal_' . $tahun] ?? ''));
+        }
+        return $memo[$kunci] = $angka;
+    }
+}
+
+if (!function_exists('tahun_penilaian_dari_tanggal')) {
+    /** Angka tahun (4 digit) dari sebuah tanggal ISO `YYYY-MM-DD`; '' bila tidak terbaca. */
+    function tahun_penilaian_dari_tanggal(string $tanggal): string
+    {
+        $iso = tanggal_iso($tanggal);
+        if ($iso === '') {
+            return '';
+        }
+        $th = (int)substr($iso, 0, 4);
+        return ($th >= 1900 && $th <= 2200) ? (string)$th : '';
+    }
+}
+
+// ============================================================================
+// 4. PENGAWAS BINAAN DARI APLIKASI SUPERVISI → otomatis PENILAI 1 (KETUA TIM)
+//    v1.12.0 — permintaan pemilik:
+//      "Pada halaman akun pengawas muncul seluruh daftar madrasah/sekolah binaannya. Dan dia
+//       otomatis menjadi penilai 1 (Ketua Tim). Untuk penilai 2 dia yang akan menentukan dari
+//       daftar pengawas yang ada."
+//
+//    Sumber peta binaan = `pengawas_sekolah` pada basis data Supervisi (dibaca BACA-SAJA lewat
+//    inc/supervisi.php). Karena itu halaman akun pengawas TIDAK lagi memakai pilihan sendiri
+//    "Penilai 1 / Penilai 2": posisi 1 melekat otomatis, sedangkan posisi 2 ditunjuk Ketua Tim.
+// ============================================================================
+
+if (!function_exists('penilai_posisi_pemegang_user')) {
+    /** user_id yang memegang sebuah posisi pada madrasah tertentu (0 = belum ada). */
+    function penilai_posisi_pemegang_user(int $sekolahId, int $posisi): int
+    {
+        if ($sekolahId <= 0 || $posisi <= 0) {
+            return 0;
+        }
+        return (int)(val('SELECT user_id FROM pengawas_sekolah WHERE sekolah_id = ? AND posisi = ?',
+            [$sekolahId, $posisi]) ?? 0);
+    }
+}
+
+if (!function_exists('penilai_binaan_pengawas')) {
+    /**
+     * Seluruh madrasah BINAAN seorang akun pengawas (permintaan pemilik).
+     *
+     * Binaan = lembaga pada PETA PENGAWAS BINAAN aplikasi Supervisi yang sudah ditarik ke e-PKKM
+     * (dicocokkan lewat `sekolah.supervisi_id`), ditambah madrasah tempat akun ini sudah ditugaskan
+     * sebagai Penilai 1 (data lama / penugasan Super Admin) supaya tidak ada tugas yang "hilang".
+     *
+     * @return array tiap baris: id, nama, kecamatan, status_lembaga, posisi (posisi akun ini),
+     *               ketua (?array akun pemegang posisi 1), penilai2 (?array akun pemegang posisi 2)
+     */
+    function penilai_binaan_pengawas(array $user): array
+    {
+        $uid = (int)($user['id'] ?? 0);
+        if ($uid <= 0) {
+            return [];
+        }
+        $supId = (int)($user['supervisi_id'] ?? 0);
+        $binaanSuper = $supId > 0 ? supervisi_binaan_ids($supId) : [];
+
+        $milik = [];
+        foreach (all('SELECT sekolah_id, posisi FROM pengawas_sekolah WHERE user_id = ?', [$uid]) as $t) {
+            $milik[(int)$t['sekolah_id']] = (int)$t['posisi'];
+        }
+
+        $hasil = [];
+        foreach (all("SELECT id, nama, kecamatan, kabupaten, status_lembaga, supervisi_id FROM sekolah
+                       WHERE aktif = 1 AND daftar_status = 'disetujui' ORDER BY nama") as $s) {
+            $sid = (int)$s['id'];
+            $dariBinaan = $binaanSuper !== [] && (int)($s['supervisi_id'] ?? 0) > 0
+                && isset($binaanSuper[(int)$s['supervisi_id']]);
+            $posisi = (int)($milik[$sid] ?? 0);
+            // tampil bila binaan Supervisi, atau akun ini memang sudah ditugaskan di sana
+            if (!$dariBinaan && $posisi <= 0) {
+                continue;
+            }
+            $hasil[] = [
+                'id' => $sid,
+                'nama' => (string)$s['nama'],
+                'kecamatan' => (string)($s['kecamatan'] ?? ''),
+                'kabupaten' => (string)($s['kabupaten'] ?? ''),
+                'status_lembaga' => status_lembaga_sah($s['status_lembaga'] ?? ''),
+                'binaan_supervisi' => $dariBinaan,
+                'posisi' => $posisi,
+                'ketua' => penilai_akun_untuk($sid, '1'),
+                'penilai2' => penilai_akun_untuk($sid, '2'),
+            ];
+        }
+        return $hasil;
+    }
+}
+
+if (!function_exists('penilai_punya_peta_binaan')) {
+    /**
+     * Apakah akun ini punya PETA BINAAN pada aplikasi Supervisi (akun tertarik dari Supervisi dan
+     * terdaftar sebagai pengawas binaan minimal satu lembaga aktif)?
+     *
+     * Akun yang TIDAK punya peta binaan (mis. akun penilai buatan Super Admin) tetap memakai
+     * formulir pilihan sendiri seperti sebelumnya, sehingga tidak ada akun yang "kehilangan" jalan
+     * untuk memperoleh penugasan.
+     */
+    function penilai_punya_peta_binaan(array $user): bool
+    {
+        $supId = (int)($user['supervisi_id'] ?? 0);
+        return $supId > 0 && supervisi_binaan_ids($supId) !== [];
+    }
+}
+
+if (!function_exists('penilai_binaan_sinkron')) {
+    /**
+     * Tetapkan pengawas binaan sebagai PENILAI 1 (Ketua Tim) pada madrasah binaannya yang posisinya
+     * masih kosong. Idempoten — aman dipanggil setiap kali halaman penilai dibuka.
+     *
+     * Posisi 1 yang sudah dipegang pengawas binaan LAIN tidak pernah direbut (dilaporkan sebagai
+     * "bentrok"); posisi 2 tidak pernah diisi otomatis (ditentukan Ketua Tim).
+     *
+     * @return array{baru:int, bentrok:string[]}
+     */
+    function penilai_binaan_sinkron(array $user): array
+    {
+        $hasil = ['baru' => 0, 'bentrok' => []];
+        $uid = (int)($user['id'] ?? 0);
+        if ($uid <= 0 || ($user['role'] ?? '') !== 'pengawas') {
+            return $hasil;
+        }
+        foreach (penilai_binaan_pengawas($user) as $b) {
+            $sid = (int)$b['id'];
+            if ((int)$b['posisi'] > 0) {
+                continue;   // sudah punya posisi (1 = Ketua Tim, 2 = ditunjuk Ketua, >=3 = tambahan)
+            }
+            $pemegang = penilai_posisi_pemegang_user($sid, 1);
+            if ($pemegang > 0) {
+                $nama = (string)(val('SELECT nama FROM users WHERE id = ?', [$pemegang]) ?? 'pengawas lain');
+                $hasil['bentrok'][] = $b['nama'] . ' sudah dinilai oleh ' . $nama;
+                continue;
+            }
+            mulai_transaksi();
+            try {
+                q('INSERT OR REPLACE INTO pengawas_sekolah (user_id, sekolah_id, posisi, dibuat)
+                   VALUES (?, ?, 1, ?)', [$uid, $sid, date('Y-m-d H:i:s')]);
+                selesai_transaksi(true);
+            } catch (Throwable $t) {
+                selesai_transaksi(false);
+                continue;
+            }
+            penilai_sinkron($uid, $sid, 1);
+            $hasil['baru']++;
+        }
+        return $hasil;
+    }
+}
+
+if (!function_exists('penilai_akun_pengawas_list')) {
+    /**
+     * "Daftar pengawas yang ada" — akun pengawas AKTIF yang dapat dipilih menjadi Penilai 2.
+     *
+     * Hanya akun yang jabatannya memang (atau dianggap) pengawas: Penilai 2 menilai Tahun Pertama
+     * s.d. Keempat, sehingga jabatan lain (Guru/Tendik/Komite/…) tidak ditawarkan.
+     *
+     * @param int $kecualiUserId akun yang tidak perlu ditawarkan (Ketua Tim itu sendiri)
+     */
+    function penilai_akun_pengawas_list(int $kecualiUserId = 0): array
+    {
+        $hasil = [];
+        foreach (all("SELECT id, nama, jabatan, nip, instansi, username, role
+                        FROM users
+                       WHERE role = 'pengawas' AND aktif = 1 AND id <> ?
+                       ORDER BY nama", [$kecualiUserId]) as $u) {
+            if (!penilai_jabatan_pengawas($u)) {
+                continue;
+            }
+            $hasil[] = $u;
+        }
+        return $hasil;
+    }
+}
+
+if (!function_exists('penilai2_simpan')) {
+    /**
+     * Ketua Tim (Penilai 1) menentukan PENILAI 2 (Anggota Tim) sebuah madrasah dari daftar pengawas.
+     *
+     * Ditegakkan di server (bukan hanya di formulir):
+     *  - hanya akun yang memegang posisi 1 pada madrasah itu yang boleh menentukan;
+     *  - calon wajib akun pengawas yang AKTIF, bukan dirinya sendiri, dan bukan Ketua Tim madrasah itu;
+     *  - nilai 0 = "belum ditentukan" (melepas Penilai 2 yang lama);
+     *  - satu posisi hanya dipegang satu akun: pemegang posisi 2 yang lama otomatis dilepas.
+     *
+     * @param int   $ketuaId user_id Ketua Tim yang sedang menyimpan
+     * @param array $peta    [sekolah_id => user_id calon penilai 2 (0 = kosongkan)]
+     * @return array{disimpan:int, dikosongkan:int, ditolak:string[]}
+     */
+    function penilai2_simpan(int $ketuaId, array $peta): array
+    {
+        $hasil = ['disimpan' => 0, 'dikosongkan' => 0, 'ditolak' => []];
+        if ($ketuaId <= 0) {
+            $hasil['ditolak'][] = 'Akun tidak dikenali.';
+            return $hasil;
+        }
+        foreach ($peta as $sid => $calon) {
+            $sid = (int)$sid;
+            $calon = (int)$calon;
+            if ($sid <= 0) {
+                continue;
+            }
+            $s = one('SELECT id, nama FROM sekolah WHERE id = ? AND aktif = 1', [$sid]);
+            if (!$s) {
+                continue;
+            }
+            $nama = (string)$s['nama'];
+            if (pengawas_posisi_di($ketuaId, $sid) !== 1) {
+                $hasil['ditolak'][] = $nama . ': hanya ' . penilai_posisi_teks('1')
+                    . ' yang boleh menentukan ' . penilai_posisi_teks('2') . '.';
+                continue;
+            }
+            $lama = penilai_posisi_pemegang_user($sid, 2);
+
+            // ---------------- kosongkan (belum ditentukan) ----------------
+            if ($calon === 0) {
+                if ($lama === 0) {
+                    continue;
+                }
+                mulai_transaksi();
+                try {
+                    q('DELETE FROM pengawas_sekolah WHERE sekolah_id = ? AND posisi = 2', [$sid]);
+                    q("DELETE FROM penilai WHERE sekolah_id = ? AND kategori = 'pengawas' AND kode = '2'",
+                        [$sid]);
+                    selesai_transaksi(true);
+                    $hasil['dikosongkan']++;
+                } catch (Throwable $t) {
+                    selesai_transaksi(false);
+                    $hasil['ditolak'][] = $nama . ': gagal mengosongkan (' . $t->getMessage() . ')';
+                }
+                continue;
+            }
+
+            // ---------------- tetapkan calon ----------------
+            if ($calon === $ketuaId) {
+                $hasil['ditolak'][] = $nama . ': Anda sendiri sudah menjadi ' . penilai_posisi_teks('1')
+                    . ', tidak dapat merangkap ' . penilai_posisi_teks('2') . '.';
+                continue;
+            }
+            $akun = one("SELECT * FROM users WHERE id = ? AND role = 'pengawas' AND aktif = 1", [$calon]);
+            if (!$akun) {
+                $hasil['ditolak'][] = $nama . ': akun penilai yang dipilih tidak ditemukan atau nonaktif.';
+                continue;
+            }
+            if (!penilai_jabatan_pengawas($akun)) {
+                $hasil['ditolak'][] = $nama . ': ' . $akun['nama'] . ' bukan pengawas (jabatan '
+                    . (trim((string)($akun['jabatan'] ?? '')) !== '' ? $akun['jabatan'] : 'belum diisi')
+                    . '), sehingga tidak dapat menjadi ' . penilai_posisi_teks('2') . '.';
+                continue;
+            }
+            if (pengawas_posisi_di($calon, $sid) === 1) {
+                $hasil['ditolak'][] = $nama . ': ' . $akun['nama'] . ' sudah menjadi '
+                    . penilai_posisi_teks('1') . ' pada madrasah itu.';
+                continue;
+            }
+            if ($lama === $calon) {
+                continue;   // tidak berubah
+            }
+            mulai_transaksi();
+            try {
+                if ($lama > 0) {
+                    q('DELETE FROM pengawas_sekolah WHERE sekolah_id = ? AND posisi = 2 AND user_id <> ?',
+                        [$sid, $calon]);
+                }
+                q('INSERT OR REPLACE INTO pengawas_sekolah (user_id, sekolah_id, posisi, dibuat)
+                   VALUES (?, ?, 2, ?)', [$calon, $sid, date('Y-m-d H:i:s')]);
+                selesai_transaksi(true);
+            } catch (Throwable $t) {
+                selesai_transaksi(false);
+                $hasil['ditolak'][] = $nama . ': gagal menyimpan (' . $t->getMessage() . ')';
+                continue;
+            }
+            penilai_sinkron($calon, $sid, 2);
+            $hasil['disimpan']++;
+        }
+        return $hasil;
     }
 }

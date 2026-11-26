@@ -230,6 +230,9 @@ if (!$bolehUbah) {
             <?php endforeach; ?>
             </tbody>
         </table></div>
+        <p class="ket mb0">Kolom <b>Tahun</b> boleh dikosongkan. Bila kosong, tahun penilaian otomatis
+            mengikuti angka tahun pada <b>Tanggal Menilai</b> yang diisi penilai, sehingga tidak perlu
+            diisi dua kali. Isian pada kolom ini (bila ada) selalu dipakai lebih dulu.</p>
     </div>
     <?php endif; ?>
 

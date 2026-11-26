@@ -99,7 +99,7 @@ $identMadrasah = [
     'Madrasah' => (string)$s['nama'],
     'NPSN' => rekap_isi_teks($s['npsn'] ?? '') !== '' ? (string)$s['npsn'] : '-',
     'NSM' => rekap_isi_teks($s['nsm'] ?? '') !== '' ? (string)$s['nsm'] : '-',
-    'Tahun Penilaian' => (string)($s['tahun_' . $tahun] ?: '-'),
+    'Tahun Penilaian' => tahun_penilaian_tampil($sid, $s, (int)$tahun) ?: '-',
     'Tanggal Menilai' => tanggal_id($tanggal) ?: '-',
 ];
 

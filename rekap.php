@@ -55,7 +55,7 @@ page_top('Rekap PKKM', 'Nilai gabungan PKKM Pengawas I &amp; II Tahun Pertama s.
                 <td class="tengah"><?= n2($r['kode']['2']['nilai'] ?? null) ?></td>
                 <td class="tengah"><b><?= n2($r['rerata']) ?></b></td>
                 <td class="tengah"><span class="pil <?= e(predikat_kelas($r['predikat'])) ?>"><?= e($r['predikat']) ?></span></td>
-                <td class="tengah"><?= $s['tahun_' . $tahun] ? (int)$s['tahun_' . $tahun] : '-' ?></td>
+                <td class="tengah"><?= e(tahun_penilaian_tampil($sid, $s, (int)$tahun) ?: '-') ?></td>
                 <td class="tengah"><?= e(tanggal_id((string)($s['tanggal_' . $tahun] ?? '')) ?: '-') ?></td>
             </tr>
         <?php endforeach; ?>

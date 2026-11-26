@@ -140,7 +140,7 @@ if (!function_exists('form_penilaian_html')) {
 if (!function_exists('form_dokumen_sel_html')) {
     /**
      * Isi kolom DOKUMEN satu butir pada lembar penilaian:
-     *  - daftar dokumen unggahan kepala madrasah (tautan buka/unduh),
+     *  - daftar dokumen kepala madrasah: BERKAS unggahan atau TAUTAN Google Drive (v1.19.0),
      *  - komentar penilai (isian bila berhak mengisi, teks bila hanya melihat).
      */
     function form_dokumen_sel_html(string $butir, array $berkas, array $komentar, string $posisi, bool $bolehIsi): string
@@ -149,9 +149,12 @@ if (!function_exists('form_dokumen_sel_html')) {
         if ($berkas) {
             $h .= '<ul class="dok-daftar dok-daftar-kecil">';
             foreach ($berkas as $d) {
-                $h .= '<li><span class="dok-pil">' . e(dok_label_berkas((string)$d['nama_berkas'])) . '</span>'
+                $tautanD = dokumen_adalah_tautan($d);
+                $h .= '<li><span class="dok-pil' . ($tautanD ? ' dok-pil-drive' : '') . '">'
+                    . ($tautanD ? 'DRIVE' : e(dok_label_berkas((string)$d['nama_berkas']))) . '</span>'
                     . '<a href="' . e($d['url']) . '" target="_blank" rel="noopener noreferrer"'
-                    . ' title="' . e($d['nama_berkas']) . '">' . e(potong_teks((string)$d['nama_berkas'], 26)) . '</a></li>';
+                    . ' title="' . e($tautanD ? $d['url'] : $d['nama_berkas']) . '">'
+                    . e(potong_teks((string)$d['nama_berkas'], 26)) . '</a></li>';
             }
             $h .= '</ul>';
         } else {

@@ -80,7 +80,7 @@ page_top('Data Madrasah', 'Super Admin &middot; seluruh madrasah dalam satu tabe
 <div class="card">
     <div class="card-kepala"><h2>Daftar Madrasah</h2>
         <div class="aksi">
-            <a class="btn btn-kecil btn-emas" href="sekolah.php"><?= ikon('check', 15) ?> Persetujuan Madrasah<?php
+            <a class="btn btn-kecil btn-emas" href="sekolah.php"><?= ikon('madrasah', 15) ?> Kelola Madrasah<?php
                 $dm = daftar_menunggu_jumlah();
                 echo $dm > 0 ? ' (' . $dm . ')' : ''; ?></a>
             <a class="btn btn-kecil btn-ghost" href="data_penilai.php"><?= ikon('guru', 15) ?> Daftar Penilai</a>
@@ -113,8 +113,8 @@ page_top('Data Madrasah', 'Super Admin &middot; seluruh madrasah dalam satu tabe
     <?php if (!$baris): ?>
         <p class="mut mb0">Tidak ada madrasah yang cocok dengan saringan.
             <?php if ($cari === '' && $status === 'semua'): ?>
-                Madrasah mendaftar sendiri lewat <a href="daftar.php" target="_blank" rel="noopener">halaman
-                Pendaftaran Madrasah</a>, lalu disetujui pada menu <b>Persetujuan Madrasah</b>.
+                Lembaga ditarik dari aplikasi Supervisi pada menu
+                <a href="tarik_supervisi.php">Tarik dari Supervisi</a>.
             <?php endif; ?>
         </p>
     <?php else: ?>

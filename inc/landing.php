@@ -5,7 +5,10 @@
  * Permintaan pemilik: "Halaman depan buat landing page seperti Aplikasi Supervisi" - jadi halaman
  * depan aplikasi menjadi landing page (beranda + slider, fitur aplikasi, keunggulan, testimoni,
  * tentang aplikasi, kontak) dengan PANEL MASUK yang tetap dipertahankan, dan seluruh isinya diisi
- * lewat akun Super Admin (menu "Halaman Depan (Landing)", berkas `landing.php`).
+ * lewat akun Super Admin (menu "Halaman Depan (Landing)") — ⚠️ HALAMAN LANDING DIHAPUS v1.11.0:
+ * berkas `landing.php` beserta menunya sudah tidak ada (halaman depan kini panel masuk dua kolom).
+ * Berkas ini dipertahankan karena (a) `landing_ikon()` masih dipakai halaman publik Pendaftaran
+ * Penilai dan (b) tabel/isi landing lama tidak dihapus agar data tidak hilang.
  *
  * Isi halaman disimpan di DUA tempat:
  *  - teks tunggal (label beranda, statistik, judul tiap bagian, kontak) -> tabel `app_pengaturan`

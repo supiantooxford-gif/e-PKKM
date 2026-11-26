@@ -94,7 +94,7 @@ foreach ($rekap as $tahun => $r) {
         $judul[1],
         $identPenilai,
         $identKepala,
-        rekap_kalimat_penilaian('Penilaian Kinerja Tahunan', rekap_isi_teks($s['tahun_' . $tahun] ?? ''))
+        rekap_kalimat_penilaian('Penilaian Kinerja Tahunan', rekap_isi_teks(tahun_penilaian_tampil($sid, $s, (int)$tahun)))
     ));
 
     // kolom tabel: No | Tugas Utama | (kolom penilai…) | Rerata
@@ -135,7 +135,7 @@ $blok = array_merge($blok, $judulBlok(
     'Kepala Madrasah',
     $identPenilai,
     $identKepala,
-    rekap_kalimat_penilaian('Penilaian Kinerja Tahun Keempat', rekap_isi_teks($s['tahun_4'] ?? ''))
+    rekap_kalimat_penilaian('Penilaian Kinerja Tahun Keempat', rekap_isi_teks(tahun_penilaian_tampil($sid, $s, 4)))
 ));
 $slotRekap = penilai_sekolah_slots($sid);
 $blok[] = ['teks' => 'Dinilai oleh ' . count($slotRekap) . ' penilai Tahun Keempat ('
@@ -166,7 +166,7 @@ $blok = array_merge($blok, $judulBlok(
     'Kepala Madrasah',
     $identPenilai,
     $identKepala,
-    rekap_kalimat_penilaian('Penilaian Kinerja Empat Tahunan', rekap_isi_teks($s['tahun_4'] ?? ''))
+    rekap_kalimat_penilaian('Penilaian Kinerja Empat Tahunan', rekap_isi_teks(tahun_penilaian_tampil($sid, $s, 4)))
 ));
 $baris4 = [];
 foreach (rekap_baris_empat_tahunan($r4) as $b) {

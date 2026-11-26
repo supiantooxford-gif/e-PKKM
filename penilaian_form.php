@@ -109,12 +109,12 @@ page_top('Lembar Penilaian PKKM', e($s['nama']) . ' &middot; ' . e(penilai_label
         <div><span>Penilai:</span> <b><?= e($penilai['nama'] ?? $u['nama']) ?></b></div>
         <div><span>Posisi:</span> <b><?= e(penilai_label($kategori, $posisi)) ?></b></div>
         <div><span>Kepala Madrasah:</span> <b><?= e($s['kepala_nama'] ?: '-') ?></b></div>
-        <div><span>Tahun penilaian:</span> <b><?= e((string)($s['tahun_' . $tahun] ?: '-')) ?></b></div>
+        <div><span>Tahun penilaian:</span> <b><?= e(tahun_penilaian_tampil($sid, $s, $tahun) ?: '-') ?></b></div>
         <div><span>Tanggal menilai:</span> <b><?= $tanggalAda
             ? e(tanggal_id($tanggalMenilai))
             : '<span class="pil pil-cukup">belum diisi</span>' ?></b></div>
         <div><span>Status:</span> <b><?= $rinci['lengkap'] ? 'Lengkap' : ($rinci['terisi'] > 0 ? 'Draft' : 'Belum diisi') ?></b></div>
-        <div><span>Dokumen kepala madrasah:</span> <b><?= $jmlDokumen ?> berkas</b></div>
+        <div><span>Dokumen kepala madrasah:</span> <b><?= $jmlDokumen ?> dokumen</b></div>
         <div><span>Komentar Anda:</span> <b><?= $jmlKomentarSaya ?> butir</b></div>
     </div>
 </div>
@@ -137,7 +137,8 @@ page_top('Lembar Penilaian PKKM', e($s['nama']) . ' &middot; ' . e(penilai_label
             <?php endif; ?>
         </div>
     </div>
-    <p class="ket mb0">Dokumen bukti tiap butir (unggahan kepala madrasah) tampil pada kolom <b>Dokumen</b> di lembar
+    <p class="ket mb0">Dokumen bukti tiap butir (unggahan kepala madrasah) &mdash; berupa <b>berkas</b> atau
+        <b>tautan Google Drive</b> (bertanda <b>DRIVE</b>) &mdash; tampil pada kolom <b>Dokumen</b> di lembar
         di bawah ini. Penilai dapat melihat dokumennya, menuliskan <b>komentar</b> untuk butir itu, lalu memberi
         <b>skor 1-4</b>. Komentar tersimpan bersama nilainya saat lembar ini disimpan<?= $jmlDokumen > 0
             ? ' &mdash; saat ini tersedia ' . $jmlDokumen . ' berkas untuk ' . pilihan_tahun($tahun) . '.'
@@ -154,8 +155,8 @@ page_top('Lembar Penilaian PKKM', e($s['nama']) . ' &middot; ' . e(penilai_label
     </div>
     <p class="ket">Tetapkan <b>tanggal Anda melakukan penilaian</b> pada <?= e(pilihan_tahun($tahun)) ?>
         terlebih dahulu. Tanggal ini tercetak pada lembar penilaian, laporan, dan rekap PKKM.
-        <?php if ($tahun <= 3): ?>Nilai <b><?= e((string)($s['tahun_' . $tahun] ?: '-')) ?></b><?php else: ?>
-            Tahun penilaian <b><?= e((string)($s['tahun_4'] ?: '-')) ?></b><?php endif; ?></p>
+        <?php if ($tahun <= 3): ?>Nilai <b><?= e(tahun_penilaian_tampil($sid, $s, $tahun) ?: '-') ?></b><?php else: ?>
+            Tahun penilaian <b><?= e(tahun_penilaian_tampil($sid, $s, 4) ?: '-') ?></b><?php endif; ?></p>
     <?php if ($bolehIsi): ?>
         <form method="post" action="penilaian_form.php?posisi=<?= e($posisi) ?>&tahun=<?= (int)$tahun ?>" id="formTanggalMenilai">
             <?= csrf_field() ?>

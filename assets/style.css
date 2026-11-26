@@ -326,6 +326,18 @@ table.tbl-nilai .butir-dok { width: 236px; }
     border: 1px solid var(--line); background: #fff;
 }
 .dok-unggah .btn { flex: 0 0 auto; }
+/* v1.19.0 - TAUTAN GOOGLE DRIVE (permintaan pemilik): dokumen yang sudah ada di Drive cukup
+   ditempel tautannya, di bawah isian unggah berkas pada kolom Dokumen. */
+.dok-pil-drive { background: #e8f0fe; border-color: #a8c7fa; color: #174ea6; }
+.dok-tautan { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.dok-tautan-label {
+    flex: 1 1 100%; font-size: .7rem; font-weight: 700; color: var(--hijau-tua); letter-spacing: .2px;
+}
+.dok-tautan input[type=url], .dok-tautan input[type=text] {
+    flex: 1 1 110px; min-width: 0; font-size: .74rem; padding: 4px 6px; border-radius: 7px;
+    border: 1px solid var(--line); background: #fff;
+}
+.dok-tautan .btn { flex: 0 0 auto; }
 .dok-komentar {
     background: var(--emas-muda); border: 1px solid var(--emas); border-radius: 8px;
     padding: 6px 8px; font-size: .78rem; margin-top: 6px;
@@ -779,6 +791,15 @@ body.lp { background: #ffffff; }
 .penilai-pilih .pilih-posisi input { flex: 0 0 auto; margin: 0; }
 .penilai-pilih .pilih-posisi input:disabled + span { color: var(--mut); }
 .penilai-pilih [data-pilih-cek] { width: 18px; height: 18px; cursor: pointer; }
+
+/* --- v1.12.0: kartu "Madrasah Binaan Saya" (pengawas binaan Supervisi = Penilai 1/Ketua Tim) --- */
+.penilai-binaan td { vertical-align: middle; }
+.penilai-binaan .kolom-penilai2 { width: 340px; }
+.penilai-binaan select {
+    width: 100%; max-width: 320px; padding: 7px 9px; border: 1px solid var(--line);
+    border-radius: 8px; background: #fff; color: #26332c; font-size: .84rem; font-family: inherit;
+}
+.penilai-binaan select:focus { outline: 2px solid rgba(20,104,63,.35); outline-offset: 1px; }
 .penilai-jabatan-chip {
     display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
     background: var(--hijau-muda); color: var(--hijau-tua); font-size: .78rem; font-weight: 700;
@@ -812,6 +833,8 @@ body.lp { background: #ffffff; }
 @media (max-width: 560px) {
     .lp-daftar-dua { grid-template-columns: minmax(0, 1fr); }
     .penilai-pilih .kolom-posisi, .penilai-pilih .kolom-centang { width: auto; }
+    .penilai-binaan .kolom-penilai2 { width: auto; }
+    .penilai-binaan select { max-width: none; }
 }
 
 @media (max-width: 1080px) {
@@ -951,6 +974,8 @@ body.lp { background: #ffffff; }
 .rk-sheet:last-child { page-break-after: auto; break-after: auto; }
 .rk-judul { text-align: center; font-weight: 700; font-size: 12.5pt; line-height: 1.25; }
 .rk-judul2 { text-align: center; font-weight: 700; font-size: 12pt; line-height: 1.25; margin-bottom: 16px; }
+/* Tahun penilaian di bawah subjudul lembar laporan (permintaan pemilik: kotak merah) */
+.rk-tahun { text-align: center; font-weight: 700; font-size: 11.5pt; line-height: 1.25; margin: -6px 0 8px; }
 .rk-ayat { margin: 10px 0 2px; }
 .rk-sub { font-weight: 700; margin: 6px 0 0; padding-left: 20mm; }
 table.rk-ident { width: 100%; border-collapse: collapse; margin: 2px 0 6px; }
@@ -1000,3 +1025,411 @@ table.rk-tbl thead { display: table-header-group; }
 .tgl-nilai input[type=date] { padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; font: inherit; }
 .tgl-nilai .btn { margin-bottom: 1px; }
 .pil-tgl { background: var(--hijau-muda); color: var(--hijau-tua); }
+
+/* ==========================================================================
+   HALAMAN DEPAN BARU (v1.11.0) — satu layar dua kolom: identitas + panel masuk.
+   Permintaan pemilik: "Halaman depan rubah tampilannya (tidak perlu landing page)".
+   Menggantikan seluruh gaya landing page di halaman masuk; gaya .lp-* tetap dipakai
+   halaman publik Pendaftaran Penilai (daftar_penilai.php).
+   ========================================================================== */
+body.dp { background: #ffffff; }
+.dp-layar {
+    display: grid; grid-template-columns: minmax(0, 1.62fr) minmax(380px, .88fr);
+    min-height: 100vh; align-items: stretch;
+}
+
+/* ------------------------------------------------ kolom kiri: identitas ----- */
+.dp-kiri {
+    position: relative; display: flex; flex-direction: column;
+    padding: 30px 44px 0; overflow: hidden;
+    background:
+        radial-gradient(900px 420px at 8% -10%, #ffffff 0%, rgba(255,255,255,0) 70%),
+        linear-gradient(180deg, #f7fbf8 0%, #eaf4ee 100%);
+    border-right: 1px solid #e3eee7;
+}
+.dp-merek { display: flex; align-items: center; gap: 12px; }
+.dp-lambang { display: grid; place-items: center; flex: 0 0 auto; }
+.dp-merek-teks b {
+    display: block; font-size: 1.55rem; line-height: 1; letter-spacing: .5px;
+    color: #0b4a33; font-weight: 800;
+}
+.dp-merek-teks i {
+    display: block; font-style: normal; font-size: .6rem; letter-spacing: .16em;
+    text-transform: uppercase; color: #3d6b56; margin-top: 5px;
+}
+.dp-judul {
+    margin: 22px 0 14px; font-size: clamp(1.6rem, 2.5vw, 2.35rem); line-height: 1.18;
+    color: #14352a; font-weight: 800; font-family: inherit; letter-spacing: -.3px;
+}
+.dp-judul span { color: #178a56; }
+
+.dp-ciri { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.dp-ciri li {
+    background: rgba(255, 255, 255, .82); border: 1px solid #dbe8df; border-radius: 13px;
+    padding: 14px 13px; box-shadow: 0 3px 12px rgba(17, 61, 40, .06);
+    display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.dp-ciri-ikon {
+    display: grid; place-items: center; width: 40px; height: 40px; border-radius: 11px;
+    background: #eaf6ee; color: #14603f; margin-bottom: 7px;
+}
+.dp-ciri b { font-size: .82rem; line-height: 1.25; color: #163a2b; }
+.dp-ciri i { font-style: normal; font-size: .71rem; color: #5d7669; line-height: 1.35; }
+
+.dp-gambar { margin-top: auto; padding-top: 12px; }
+/* v1.13.1: kartu keunggulan kini berada DI BAWAH baris manfaat (Terintegrasi … Transparan) */
+.dp-kiri > .dp-ciri { margin-top: 12px; padding-bottom: 12px; }
+
+/* --- v1.13.0: SLIDER GAMBAR halaman depan (diisi Super Admin, menu Layanan) --- */
+.dp-slider {
+    position: relative; border-radius: 26px; overflow: hidden; background: #e6f3ea;
+    box-shadow: 0 14px 24px rgba(17, 61, 40, .10);
+    /* v1.13.2 (permintaan pemilik): ukuran kotak slider MENGIKUTI rasio gambar yang diunggah
+       (variabel --dp-rasio diisi initDepanSlider() dari ukuran asli gambar) sehingga gambar
+       tampil UTUH — tidak terpotong seperti pada tinggi tetap sebelumnya. 2 / 1 = cadangan
+       bila JavaScript tidak berjalan. */
+    width: 100%; aspect-ratio: var(--dp-rasio, 2 / 1); max-height: 660px;
+}
+.dp-slide-layar { position: relative; width: 100%; height: 100%; }
+.dp-slide { position: absolute; inset: 0; margin: 0; display: none; }
+.dp-slide.on { display: block; }
+.dp-slide img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dp-slide-ket {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 34px 20px 16px;
+    background: linear-gradient(180deg, rgba(6, 40, 26, 0) 0%, rgba(6, 40, 26, .78) 100%);
+    display: flex; flex-direction: column; gap: 3px; color: #fff;
+}
+.dp-slide-ket b { font-size: .98rem; line-height: 1.3; }
+.dp-slide-ket span { font-size: .8rem; line-height: 1.35; color: rgba(255, 255, 255, .9); }
+.dp-slide-panah {
+    position: absolute; z-index: 3; /* di atas lapisan pelindung gambar (::after z-index:2) */
+    top: 50%; transform: translateY(-50%); width: 36px; height: 36px;
+    border-radius: 50%; border: 1px solid rgba(255, 255, 255, .55); background: rgba(6, 40, 26, .45);
+    color: #fff; font-size: 1rem; line-height: 1; cursor: pointer; display: grid; place-items: center;
+    padding: 0; transition: background .15s ease;
+}
+.dp-slide-panah:hover { background: rgba(6, 40, 26, .72); }
+.dp-slide-panah:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.dp-slide-sebelum { left: 12px; }
+.dp-slide-lanjut { right: 12px; }
+.dp-slide-titik {
+    position: absolute; z-index: 3; /* di atas lapisan pelindung gambar */
+    left: 50%; transform: translateX(-50%); bottom: 10px;
+    display: flex; gap: 7px; align-items: center;
+}
+.dp-slide-titik-item {
+    width: 9px; height: 9px; border-radius: 50%; padding: 0; cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, .85); background: rgba(255, 255, 255, .35);
+}
+.dp-slide-titik-item.on { background: #fff; width: 22px; border-radius: 999px; }
+
+/* ============================================================================
+   GAMBAR HALAMAN DEPAN — DILINDUNGI (v1.14.0, permintaan pemilik: "tidak bisa dibuka sumbernya
+   (dikunci) seperti pada aplikasi e-GURU dan Supervisi")
+   • `pointer-events:none` → gambar tidak pernah menjadi sasaran klik/sentuhan, sehingga menu
+     bawaan peramban ("Simpan gambar sebagai…", "Buka gambar di tab baru"), seret-lepas ke desktop,
+     dan menu tekan-lama di HP tidak pernah muncul untuk gambar itu.
+   • `[data-lindung-wadah]` → wadah (figure slide) menutup areanya dengan lapisan tembus pandang
+     (::after), jadi gambar tetap tidak bisa diseret/ditekan lama; lapisan ini TIDAK menghalangi
+     panah/titik navigasi karena keduanya berada di luar wadah.
+   • Alamat sumber gambar sendiri tidak pernah tercetak di HTML — lihat `gambar.php` +
+     `inc/gambar.php` (gambar dialirkan server, 403 bila dibuka langsung).
+   ============================================================================ */
+img.lp-lindung,
+.dp-slide img.lp-lindung {
+    pointer-events: none;
+    -webkit-user-select: none; user-select: none;
+    -webkit-user-drag: none;
+    -webkit-touch-callout: none;
+}
+[data-lindung-wadah] { position: relative; -webkit-touch-callout: none; }
+[data-lindung-wadah]::after { content: ""; position: absolute; inset: 0; z-index: 2; }
+[data-lindung-wadah] img.lp-lindung { position: relative; z-index: 1; }
+/* Saat dicetak, lapisan penutup tidak diperlukan (dan tidak boleh menutupi gambar). */
+@media print {
+    [data-lindung-wadah]::after { display: none; }
+    img.lp-lindung { pointer-events: auto; }
+}
+
+/* --- v1.13.0: halaman Super Admin "Slider Halaman Depan" --- */
+.form-slider { display: flex; flex-direction: column; gap: 14px; }
+.form-slider label { display: block; font-size: .82rem; font-weight: 700; color: #33443b; margin-bottom: 5px; }
+.slider-pratinjau { display: flex; flex-direction: column; gap: 6px; }
+.slider-pratinjau img { width: 100%; max-width: 420px; border-radius: 12px; border: 1px solid var(--line); display: block; }
+.slider-pratinjau-layar { max-width: 520px; }
+.slider-pratinjau-layar .dp-slider {
+    border-radius: 16px; box-shadow: 0 8px 18px rgba(17, 61, 40, .10);
+    max-height: 260px;   /* pratinjau di halaman admin tetap ringkas */
+}
+.tbl-slider td { vertical-align: middle; }
+.slider-mini {
+    width: 132px; height: 78px; object-fit: cover; border-radius: 9px;
+    border: 1px solid var(--line); display: block; background: #eef2ef;
+}
+form.inline { display: inline-flex; gap: 6px; align-items: center; }
+.form-hapus-slider input[type="text"] { max-width: 120px; padding: 5px 7px; font-size: .8rem; }
+@media (max-width: 560px) {
+    .slider-mini { width: 92px; height: 58px; }
+    .form-hapus-slider input[type="text"] { max-width: 96px; }
+}
+.dp-ilustrasi { display: block; width: 100%; height: auto; max-height: 340px; filter: drop-shadow(0 14px 24px rgba(17, 61, 40, .08)); }
+
+.dp-kaki { display: flex; align-items: center; gap: 18px; padding: 10px 0 18px; border-top: 1px solid #dbe8df; margin-top: 6px; }
+.dp-manfaat { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; flex: 1 1 auto; }
+.dp-manfaat li { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding-left: 12px; border-left: 1px solid #dbe8df; }
+.dp-manfaat li:first-child { border-left: 0; padding-left: 0; }
+.dp-manfaat span { color: #14603f; margin-bottom: 3px; }
+.dp-manfaat b { font-size: .78rem; color: #163a2b; }
+.dp-manfaat i { font-style: normal; font-size: .7rem; color: #5d7669; line-height: 1.35; }
+.dp-lencana {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 9px; padding: 10px 14px;
+    border-radius: 12px; background: #0b4a33; color: #eaf6ee;
+}
+.dp-lencana-ikon { display: grid; place-items: center; }
+.dp-lencana-ikon svg path:first-child { fill: #eaf6ee; }
+.dp-lencana-ikon svg path:last-child { fill: #c9a227; }
+.dp-lencana-teks b { display: block; font-size: .92rem; letter-spacing: .5px; line-height: 1; }
+.dp-lencana-teks i { display: block; font-style: normal; font-size: .52rem; letter-spacing: .12em; text-transform: uppercase; opacity: .85; margin-top: 4px; }
+
+/* ------------------------------------------------ kolom kanan: panel masuk -- */
+.dp-kanan {
+    display: grid; place-items: center; padding: 44px 34px;
+    /* v1.17.0 (permintaan pemilik): latar kolom panel masuk DIKEMBALIKAN menjadi PUTIH BERSIH
+       (sebelumnya dibuat agak gelap pada v1.16.0). Jangan digelapkan lagi tanpa bertanya. */
+    background: #ffffff;
+    border-left: 1px solid #e3eee7;
+}
+.dp-panel { width: 100%; max-width: 400px; }
+.dp-panel-judul { font-size: 1.5rem; color: #12291f; font-family: inherit; font-weight: 800; margin: 0 0 2px; }
+.dp-panel-sub { margin: 0 0 4px; font-size: .95rem; font-weight: 700; color: #1d3a2c; line-height: 1.3; }
+.dp-panel-ket { margin: 0 0 18px; font-size: .84rem; color: var(--mut); }
+
+.dp-form { display: flex; flex-direction: column; gap: 10px; }
+.dp-medan {
+    display: flex; align-items: stretch; overflow: hidden;
+    border: 1px solid #ccdcd3; border-radius: 9px; background: #fff;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+.dp-medan:focus-within { border-color: #2f8b5f; box-shadow: 0 0 0 3px rgba(47, 139, 95, .14); }
+.dp-medan-ikon {
+    display: grid; place-items: center; width: 44px; flex: 0 0 44px;
+    background: #f5f9f6; color: #4d7361; border-right: 1px solid #e2ece6;
+}
+.dp-medan input {
+    flex: 1 1 auto; min-width: 0; border: 0; outline: 0; background: transparent;
+    padding: 12px 12px; font: inherit; font-size: .95rem; color: var(--ink);
+}
+.dp-medan input::placeholder { color: #8b9d94; }
+.dp-mata {
+    flex: 0 0 auto; border: 0; background: transparent; color: #5d7669; cursor: pointer;
+    padding: 0 12px; display: grid; place-items: center;
+}
+.dp-mata:hover { color: #14603f; }
+.dp-tombol { margin-top: 4px; background: #178a56; border: 0; color: #fff; padding: 12px 16px; font-size: .96rem; font-weight: 600; border-radius: 9px; }
+.dp-tombol:hover { background: #126b43; }
+.dp-lupa { margin: 12px 0 18px; font-size: .82rem; color: var(--mut); }
+.dp-lupa b { color: #14603f; }
+
+.dp-pendaftaran {
+    border: 1px dashed #ccdcd3; border-radius: 11px; padding: 13px 14px; background: #f8fbf9;
+}
+.dp-pendaftaran-kepala { display: flex; align-items: center; gap: 6px; color: #163a2b; font-size: .86rem; margin-bottom: 5px; }
+.dp-pendaftaran p { margin: 0 0 10px; font-size: .76rem; color: #5d7669; line-height: 1.5; }
+.dp-versi { margin: 16px 0 0; font-size: .74rem; color: #7a8d82; }
+.dp-penulis { margin: 2px 0 0; font-size: .72rem; color: #93a49a; }
+
+/* ------------------------------------------------------------- responsif --- */
+@media (max-width: 1100px) {
+    .dp-ciri { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dp-manfaat { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dp-manfaat li:nth-child(3) { border-left: 0; padding-left: 0; }
+}
+@media (max-width: 900px) {
+    .dp-layar { grid-template-columns: minmax(0, 1fr); }
+    .dp-kiri { padding: 24px 20px 8px; border-right: 0; border-bottom: 1px solid #e3eee7; }
+    .dp-judul { margin-top: 20px; }
+    .dp-ilustrasi { max-height: 240px; }
+    .dp-kaki { flex-direction: column; align-items: stretch; gap: 12px; }
+    .dp-lencana { align-self: flex-start; }
+    .dp-kanan { padding: 26px 20px 36px; border-left: 0; border-top: 1px solid #e3eee7; }
+    .dp-panel { max-width: 480px; margin: 0 auto; }
+}
+@media (max-width: 560px) {
+    .dp-ciri { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .dp-ciri li { padding: 11px 10px; }
+    .dp-ciri i { display: none; }
+    .dp-ilustrasi { max-height: 190px; }
+    .dp-slide-ket { padding: 26px 14px 12px; }
+    .dp-slide-ket b { font-size: .88rem; }
+    .dp-slide-panah { width: 30px; height: 30px; font-size: .9rem; }
+    .dp-manfaat { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .dp-manfaat li { border-left: 0; padding-left: 0; flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .dp-manfaat li i { flex: 1 1 100%; padding-left: 26px; }
+}
+
+/* ==========================================================================
+   TARIK DARI SUPERVISI (v1.11.0) — lembaga aktif + hasil penarikan
+   ========================================================================== */
+.chip {
+    display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: .72rem;
+    background: #eef2ef; border: 1px solid #d5e0d9; color: #4d655a; line-height: 1.6;
+    white-space: nowrap;
+}
+.chip-ok { background: #e4f4e9; border-color: #9ed3b3; color: #14683f; }
+.tarik-aturan { padding-left: 20px; display: grid; gap: 5px; }
+.tarik-aturan li { line-height: 1.55; }
+.tarik-cek { width: 64px; text-align: center; }
+.tarik-cek input[type=checkbox] { width: 18px; height: 18px; accent-color: #14683f; cursor: pointer; }
+.tarik-nama { font-weight: 600; color: #163a2b; cursor: pointer; }
+.tarik-pilih-semua { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.tarik-hasil { display: grid; gap: 12px; }
+.tarik-hasil-item {
+    border: 1px solid var(--line); border-left: 4px solid #2f8b5f; border-radius: 10px;
+    padding: 12px 14px; background: #fbfdfb; display: grid; gap: 3px;
+}
+.tarik-hasil-item.gagal { border-left-color: #b3261e; background: #fdf6f6; }
+.tarik-hasil-item > b { font-size: .95rem; }
+@media (max-width: 640px) {
+    .tarik-cek { width: 44px; }
+}
+/* layar sedang (901–1200px): beri panel masuk sedikit lebih banyak ruang */
+@media (max-width: 1200px) and (min-width: 901px) {
+    .dp-layar { grid-template-columns: minmax(0, 1.5fr) minmax(360px, 1fr); }
+    .dp-kiri { padding-left: 28px; padding-right: 28px; }
+    .dp-kanan { padding: 36px 22px; }
+}
+
+/* --- v1.12.0: kartu "Hapus Semua Madrasah" (Kelola Madrasah, Super Admin) --- */
+.form-hapus-semua { margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.form-hapus-semua label { display: block; font-size: .84rem; font-weight: 700; color: #7d1f2a; margin-bottom: 6px; }
+.form-hapus-baris { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.form-hapus-baris input[type="text"] { max-width: 220px; }
+
+/* ============================================================================
+   LOG AKTIVITAS (v1.15.0) — halaman Super Admin: pengguna online + riwayat masuk/keluar
+   ============================================================================ */
+.baris-paginasi {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line);
+}
+.baris-paginasi .aksi { margin-left: auto; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.aksi-cepat { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+#tblRiwayat td, #tblOnline td { vertical-align: middle; }
+#tblBersih td:first-child { font-size: .86rem; }
+#cardBersih .form-2 { margin-top: 10px; }
+#cardBersih .alert { margin: 0; }
+
+/* ============================================================================
+   HALAMAN MASUK — DUA BARIS BAWAH DIBUAT TIMBUL MENCOLOK (v1.16.0)
+   Permintaan pemilik (menandai dua baris bawah dengan warna biru): *"buat tampilan timbul
+   mencolok"* — berlaku untuk baris manfaat (Terintegrasi · Efisien · Akses Mudah · Transparan +
+   lencana) DAN empat kartu keunggulan (Instrumen Lengkap, 7 Penilai Tahun Keempat, Rekap & Cetak,
+   Aman & Terpercaya).
+   • Bayangan BERLAPIS (luar + garis terang di dalam) memberi kesan kotak terangkat dari kertas.
+   • Garis emas tipis di tepi atas (pola identitas aplikasi) memperkuat kesan "kartu".
+   • Saat kursor di atasnya kartu terangkat sedikit (hanya pada perangkat bertetikus/hover).
+   Jangan dihapus tanpa bertanya — ini permintaan langsung pemilik.
+   ============================================================================ */
+
+/* ---- baris manfaat + lencana: satu kartu terangkat ---- */
+.dp-kaki {
+    padding: 14px 16px; border-top: 0; border-radius: 18px; position: relative; margin-top: 12px;
+    background: linear-gradient(180deg, #ffffff 0%, #f3faf6 100%);
+    border: 1px solid #d3e4da;
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, .95) inset,
+        0 -2px 0 rgba(11, 74, 51, .05) inset,
+        0 12px 26px rgba(11, 74, 51, .16),
+        0 3px 8px rgba(11, 74, 51, .10);
+}
+.dp-kaki::before {
+    content: ""; position: absolute; left: 18px; right: 18px; top: -2px; height: 3px;
+    border-radius: 3px; background: linear-gradient(90deg, #c9a227, #eeda92 50%, #c9a227);
+}
+.dp-manfaat li,
+.dp-manfaat li:first-child {
+    padding: 9px 11px; border: 1px solid #e1ece6; border-left: 1px solid #e1ece6; border-radius: 12px;
+    background: #ffffff;
+    box-shadow: 0 4px 10px rgba(11, 74, 51, .10), 0 1px 0 rgba(255, 255, 255, .9) inset;
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.dp-manfaat span { display: block; }
+.dp-lencana {
+    box-shadow: 0 8px 18px rgba(11, 74, 51, .30), 0 1px 0 rgba(255, 255, 255, .18) inset;
+}
+
+/* ---- empat kartu keunggulan: lebih terangkat + aksen emas di tepi atas ---- */
+.dp-ciri li {
+    position: relative; background: #ffffff; border: 1px solid #cfe2d8;
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, .95) inset,
+        0 10px 22px rgba(11, 74, 51, .15),
+        0 2px 6px rgba(11, 74, 51, .08);
+    transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.dp-ciri li::before {
+    content: ""; position: absolute; left: 12px; right: 12px; top: -1px; height: 3px;
+    border-radius: 0 0 3px 3px; background: linear-gradient(90deg, #c9a227, #eeda92 50%, #c9a227);
+}
+.dp-ciri-ikon {
+    background: linear-gradient(180deg, #eaf6ee 0%, #dcefe3 100%);
+    border: 1px solid #c3ddcd;
+    box-shadow: 0 3px 8px rgba(11, 74, 51, .12), 0 1px 0 rgba(255, 255, 255, .9) inset;
+}
+@media (hover: hover) {
+    .dp-manfaat li:hover,
+    .dp-ciri li:hover {
+        transform: translateY(-3px);
+        border-color: #b9d6c6;
+        box-shadow:
+            0 1px 0 rgba(255, 255, 255, .95) inset,
+            0 16px 30px rgba(11, 74, 51, .22),
+            0 4px 10px rgba(11, 74, 51, .12);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .dp-manfaat li, .dp-ciri li, .dp-manfaat li:hover, .dp-ciri li:hover { transform: none; }
+}
+
+/* ============================================================================
+   PANEL MASUK — LOGO BULAT + JUDUL RATA TENGAH (v1.17.0, permintaan pemilik)
+   • `.dp-kanan` kembali PUTIH BERSIH (lihat aturan di atas).
+   • `.dp-logo` = tempat logo aplikasi BULAT di atas judul; logo diunggah Super Admin
+     (Layanan → Logo Aplikasi). Bila belum diunggah, tampil lencana SVG bawaan.
+   • `.dp-panel-kepala` = judul, sub judul, dan kalimat "Silakan login…" dibuat RATA TENGAH.
+     Isian formulir & catatan di bawahnya TETAP rata kiri (jangan diratakan semua).
+   ============================================================================ */
+.dp-logo {
+    width: 132px; height: 132px; margin: 0 auto 16px; border-radius: 50%;
+    overflow: hidden; display: grid; place-items: center;
+    background: #ffffff;
+    border: 1px solid #e0ebe5;
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, .95) inset,
+        0 10px 22px rgba(11, 74, 51, .16),
+        0 2px 6px rgba(11, 74, 51, .08);
+}
+.dp-logo img,
+.dp-logo .dp-logo-lencana {
+    width: 100%; height: 100%; display: block; object-fit: cover; border-radius: 50%;
+}
+.dp-panel-kepala { text-align: center; margin-bottom: 16px; }
+.dp-panel-kepala .dp-panel-ket { margin: 0; }
+@media (max-width: 900px) {
+    .dp-logo { width: 118px; height: 118px; margin-bottom: 14px; }
+}
+@media (max-width: 560px) {
+    .dp-logo { width: 100px; height: 100px; margin-bottom: 12px; }
+}
+
+/* --- v1.17.0: pratinjau logo pada halaman Super Admin "Logo Aplikasi" --- */
+.logo-pratinjau {
+    display: grid; place-items: center; padding: 20px; border-radius: 16px;
+    background: radial-gradient(circle at 50% 30%, #ffffff 0%, #f2f8f4 100%);
+    border: 1px dashed #d5e3db; margin-bottom: 12px;
+}
+.logo-pratinjau .logo-bulat,
+.logo-pratinjau .dp-logo-lencana {
+    width: 150px; height: 150px; border-radius: 50%; object-fit: cover; display: block;
+    box-shadow: 0 10px 22px rgba(11, 74, 51, .18);
+}

@@ -64,7 +64,7 @@ $posisiCetak = $posisiSaya > 0 ? (string)$posisiSaya : '1';
             $r = $rekap[$tahun]; ?>
             <tr>
                 <td><b><?= e($label) ?></b>
-                    <div class="kecil mut"><?= e($s['tahun_' . $tahun] ? 'tahun ' . (int)$s['tahun_' . $tahun] : 'tahun belum diisi') ?>
+                    <div class="kecil mut"><?= e(($thP = tahun_penilaian_tampil($sid, $s, (int)$tahun)) !== '' ? 'tahun ' . $thP : 'tahun belum diisi') ?>
                         <?= $s['tanggal_' . $tahun] ? ' &middot; ' . e(tanggal_id((string)$s['tanggal_' . $tahun])) : '' ?></div></td>
                 <?php foreach (['1', '2'] as $kode):
                     $n = $r['kode'][$kode];
@@ -157,7 +157,7 @@ $posisiCetak = $posisiSaya > 0 ? (string)$posisiSaya : '1';
             <tr>
                 <td class="tengah"><?= $noC ?></td>
                 <td><b><?= e($label) ?></b>
-                    <div class="kecil mut"><?= e($s['tahun_' . $tahun] ? 'tahun ' . (int)$s['tahun_' . $tahun] : 'tahun belum diisi') ?></div></td>
+                    <div class="kecil mut"><?= e(($thC = tahun_penilaian_tampil($sid, $s, (int)$tahun)) !== '' ? 'tahun ' . $thC : 'tahun belum diisi') ?></div></td>
                 <td class="tengah"><?= $tglC !== '' ? e(tanggal_id($tglC))
                     : '<span class="mut kecil">belum diisi</span>' ?></td>
                 <td class="tengah"><?= $rC ? (int)$rC['terisi'] . ' / ' . (int)$rC['jumlah'] : '<span class="mut">-</span>' ?></td>

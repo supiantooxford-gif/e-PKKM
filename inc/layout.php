@@ -31,6 +31,8 @@ if (!function_exists('ikon')) {
             'panah' => '<path d="M5 12h13M13 6l6 6-6 6"/>',
             'layanan' => '<path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/>',
             'daftar' => '<path d="M8 6h12M8 12h12M8 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
+            'clock' => '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+            'user' => '<circle cx="12" cy="8.5" r="3.3"/><path d="M4.8 20c1.4-3.6 4-5.4 7.2-5.4s5.8 1.8 7.2 5.4"/>',
         ];
         $isi = $p[$nama] ?? $p['dash'];
         return '<svg class="ic" viewBox="0 0 24 24" width="' . $ukuran . '" height="' . $ukuran . '" fill="none" '
@@ -46,12 +48,15 @@ if (!function_exists('menu_sidebar')) {
      * ['grup', 'Nama Grup', 'ikon', [ [href, label, ikon, lencana], … ]].
      *
      * SUSUNAN HALAMAN ADMIN (permintaan pemilik, jangan diubah tanpa bertanya):
-     *   Dashboard → Persetujuan Madrasah → Layanan (Akun Penilai, Daftar Jabatan Penilai,
-     *   Halaman Depan) → Data Madrasah → Daftar Penilai → Penilaian Kepala Madrasah →
-     *   Laporan → Rekap → Akun Saya.
+     *   Dashboard → Tarik dari Supervisi → Kelola Madrasah → Layanan (Akun Penilai, Daftar
+     *   Jabatan Penilai, Slider Halaman Depan) → Log Aktivitas → Data Madrasah → Daftar Penilai →
+     *   Penilaian Kepala Madrasah → Laporan → Rekap → Akun Saya.
      * Catatan v1.8.0: menu "Akun Pengawas" berganti nama menjadi **Akun Penilai** (isinya SELURUH
      * akun penilai: pengawas maupun jabatan lain), dan menu **Penilaian Guru & Tendik DIHAPUS**
      * (peran Guru/Tendik/Komite/Kabid/Yayasan/Kasie kini menjadi AKUN PENILAI Tahun Keempat).
+     * Catatan v1.11.0: menu **Halaman Depan (Landing) DIHAPUS** (halaman depan kini panel masuk dua
+     * kolom tanpa landing page) dan "Persetujuan Madrasah" menjadi **Kelola Madrasah** karena
+     * pendaftaran mandiri madrasah dihapus (lembaga ditarik dari aplikasi Supervisi).
      */
     function menu_sidebar(): array
     {
@@ -63,21 +68,30 @@ if (!function_exists('menu_sidebar')) {
 
         // ---------------------------------------------------------------- SUPER ADMIN
         if ($u['role'] === 'super') {
-            require_once __DIR__ . '/landing.php';
             // Saat Super Admin MASUK ke satu madrasah (konteks aktif), dua menu pengelolaan madrasah
             // itu ditampilkan tepat di bawah Dashboard agar tetap dapat dipakai.
             if ($s) {
                 $m[] = ['madrasah.php', 'Input Data Madrasah', 'madrasah'];
                 $m[] = ['dokumen.php', 'Unggah Dokumen', 'dokumen'];
             }
-            // Persetujuan pendaftaran madrasah (+ lencana jumlah pendaftar yang belum ditinjau)
-            $m[] = ['sekolah.php', 'Persetujuan Madrasah', 'madrasah', daftar_menunggu_jumlah()];
-            // sub menu LAYANAN
+            // TARIK DATA DARI APLIKASI SUPERVISI (v1.11.0, permintaan pemilik): lembaga aktif +
+            // kepala madrasah + pengawas. Satu-satunya jalan masuknya lembaga (pendaftaran mandiri
+            // madrasah sudah DIHAPUS).
+            $m[] = ['tarik_supervisi.php', 'Tarik dari Supervisi', 'unduh'];
+            // Pengelolaan madrasah (dulu "Persetujuan Madrasah" — pendaftaran mandiri sudah dihapus)
+            $m[] = ['sekolah.php', 'Kelola Madrasah', 'madrasah'];
+            // sub menu LAYANAN (menu "Halaman Depan" DIHAPUS karena landing page tidak dipakai lagi)
             $m[] = ['grup', 'Layanan', 'layanan', [
                 ['pengawas.php', 'Akun Penilai', 'pengawas'],
                 ['jabatan.php', 'Daftar Jabatan Penilai', 'nilai'],
-                ['landing.php', 'Halaman Depan', 'buka', landing_pesan_baru()],
+                // v1.13.0 (permintaan pemilik): slider gambar pada halaman masuk diisi Super Admin
+                ['depan_slider.php', 'Slider Halaman Depan', 'buka'],
+                // v1.17.0 (permintaan pemilik): logo aplikasi bulat pada panel masuk
+                ['logo.php', 'Logo Aplikasi', 'madrasah'],
             ]];
+            // v1.15.0 (permintaan pemilik): Log Aktivitas — riwayat masuk/keluar/gagal + pengguna
+            // online, seperti aplikasi e-GURU. Lencana = jumlah sesi yang sedang online.
+            $m[] = ['log.php', 'Log Aktivitas', 'clock', log_jumlah_online()];
             $m[] = ['data_madrasah.php', 'Data Madrasah', 'daftar', (int)val('SELECT COUNT(*) FROM sekolah')];
             $m[] = ['data_penilai.php', 'Daftar Penilai', 'guru',
                 (int)val("SELECT COUNT(*) FROM users WHERE role = 'pengawas'")];

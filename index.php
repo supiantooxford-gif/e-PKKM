@@ -11,7 +11,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $u['role'] === 'pengawas') {
         tolak_csrf();
     }
     $aksi = (string)($_POST['aksi'] ?? '');
+
+    // v1.12.0 (permintaan pemilik): PENILAI 1 (Ketua Tim) menentukan PENILAI 2 (Anggota Tim)
+    // dari daftar pengawas yang ada. Ditegakkan di server: hanya pemegang posisi 1 yang boleh.
+    if ($aksi === 'penilai2_simpan') {
+        $peta = is_array($_POST['penilai2'] ?? null) ? $_POST['penilai2'] : [];
+        $hasil = penilai2_simpan((int)$u['id'], $peta);
+        $pesan = [];
+        if ($hasil['disimpan'] > 0) {
+            $pesan[] = $hasil['disimpan'] . ' madrasah mendapat ' . penilai_posisi_teks('2') . '.';
+        }
+        if ($hasil['dikosongkan'] > 0) {
+            $pesan[] = $hasil['dikosongkan'] . ' madrasah dikosongkan ' . penilai_posisi_teks('2') . '.';
+        }
+        if (!$pesan) {
+            $pesan[] = 'Tidak ada perubahan ' . penilai_posisi_teks('2') . '.';
+        }
+        flash(implode(' ', $pesan)
+            . ($hasil['ditolak'] ? ' Dilewati: ' . implode('; ', $hasil['ditolak']) . '.' : ''),
+            $hasil['ditolak'] ? 'err' : 'ok');
+        redirect('index.php#cardBinaanSaya');
+    }
+
     if ($aksi === 'tugas_simpan') {
+        // v1.12.0: akun pengawas BINAAN Supervisi tidak memilih sendiri lagi — posisinya melekat
+        // otomatis sebagai Penilai 1 (Ketua Tim) sesuai peta pengawas binaan aplikasi Supervisi.
+        if (penilai_jabatan_pengawas($u) && penilai_punya_peta_binaan($u)) {
+            flash('Posisi Anda mengikuti peta pengawas binaan aplikasi Supervisi (otomatis '
+                . penilai_posisi_teks('1') . '). ' . penilai_posisi_teks('2')
+                . ' ditentukan lewat kartu Madrasah Binaan Saya.', 'err');
+            redirect('index.php#cardBinaanSaya');
+        }
         $pilih = is_array($_POST['pilih'] ?? null) ? $_POST['pilih'] : [];
         // Formulir halaman ini memakai CENTANG madrasah + pilihan posisi (radio).
         // Bentuk lama (satu pilihan bernilai posisi) tetap diterima agar tautan/skrip lama tidak rusak.
@@ -90,16 +120,30 @@ $s = current_sekolah();
 // CABANG PENILAI (peran `pengawas`) - pilih madrasah + posisi, lalu daftar tugas
 // =====================================================================
 if ($u['role'] === 'pengawas' && !$s) {
-    $tugas = pengawas_tugas((int)$u['id']);
     $jabatanSaya = trim((string)($u['jabatan'] ?? ''));
-    $pilihan = penilai_sekolah_pilihan((int)$u['id']);
+    $jabatanPengawasSaya = penilai_jabatan_pengawas($u);
+
+    // v1.12.0 (permintaan pemilik): daftar madrasah BINAAN dari peta pengawas binaan aplikasi
+    // Supervisi, dan pengawas binaan OTOMATIS menjadi Penilai 1 (Ketua Tim). Sinkronisasi ini
+    // idempoten: hanya mengisi posisi 1 yang masih kosong.
+    $pakaiBinaan = $jabatanPengawasSaya && penilai_punya_peta_binaan($u);
+    $binaanSinkron = $pakaiBinaan ? penilai_binaan_sinkron($u) : ['baru' => 0, 'bentrok' => []];
+    $tugas = pengawas_tugas((int)$u['id']);
+    $binaanSaya = $pakaiBinaan ? penilai_binaan_pengawas($u) : [];
+    $daftarPengawas = $binaanSaya ? penilai_akun_pengawas_list((int)$u['id']) : [];
+    // Pilihan sendiri (centang madrasah + posisi) hanya dipakai akun penilai yang TIDAK punya
+    // peta binaan Supervisi (mis. akun penilai yang dibuat Super Admin secara manual).
+    $pilihan = $binaanSaya ? [] : penilai_sekolah_pilihan((int)$u['id']);
     $jmlPilih = 0;
     foreach ($pilihan as $pl) {
         if ((int)$pl['posisi'] > 0) {
             $jmlPilih++;
         }
     }
-    page_top('Dashboard Penilai', 'Pilih madrasah yang Anda nilai beserta posisinya (Penilai 1 atau Penilai 2).');
+    page_top('Dashboard Penilai', $jabatanPengawasSaya
+        ? 'Seluruh madrasah binaan Anda tampil di sini — Anda menjadi ' . penilai_posisi_teks('1') . ' dan menentukan '
+            . penilai_posisi_teks('2') . '.'
+        : 'Pilih madrasah yang Anda nilai sebagai penilai Tahun Keempat.');
     ?>
     <div class="card" id="cardIdentitasPenilai">
         <div class="card-kepala"><h2>Identitas Penilai</h2>
@@ -134,16 +178,110 @@ if ($u['role'] === 'pengawas' && !$s) {
                 : 'Penilai Tahun Keempat per madrasah' ?></div></div></div>
     </div>
 
-    <!-- ============ PILIH MADRASAH & POSISI (permintaan pemilik) ============ -->
-    <?php $jabatanPengawasSaya = penilai_jabatan_pengawas($u); ?>
+    <!-- ============ MADRASAH BINAAN SAYA (v1.12.0, permintaan pemilik) ============ -->
+    <?php if ($binaanSaya): ?>
+    <div class="card" id="cardBinaanSaya">
+        <div class="card-kepala"><h2>Madrasah Binaan Saya</h2>
+            <span class="pil pil-unggul"><?= count($binaanSaya) ?> madrasah</span>
+        </div>
+        <p class="ket">Seluruh madrasah binaan yang ditetapkan pada aplikasi Supervisi tampil di sini. Anda
+            <b>otomatis</b> menjadi <b><?= e(penilai_posisi_teks('1')) ?></b> pada setiap madrasah
+            binaan. Untuk <b><?= e(penilai_posisi_teks('2')) ?></b>, tentukan sendiri dari
+            <b>daftar pengawas yang ada</b> pada kolom paling kanan, lalu tekan
+            <b>Simpan Penilai 2</b>.</p>
+        <?php if (($binaanSinkron['baru'] ?? 0) > 0): ?>
+            <div class="alert alert-info"><?= (int)$binaanSinkron['baru'] ?> madrasah binaan baru
+                ditetapkan kepada Anda sebagai <?= e(penilai_posisi_teks('1')) ?>.</div>
+        <?php endif; ?>
+        <?php if (!empty($binaanSinkron['bentrok'])): ?>
+            <div class="alert alert-err">
+                <b>Madrasah yang sudah dinilai pengawas binaan lain (posisi
+                    <?= e(penilai_posisi_teks('1')) ?> tidak direbut):</b>
+                <ul class="mb0">
+                    <?php foreach ($binaanSinkron['bentrok'] as $bt): ?><li><?= e($bt) ?></li><?php endforeach; ?>
+                </ul>
+                Anda tetap dapat ditunjuk sebagai <?= e(penilai_posisi_teks('2')) ?> oleh Ketua Tim madrasah itu.
+            </div>
+        <?php endif; ?>
+        <form method="post" action="index.php" id="formPenilai2">
+            <?= csrf_field() ?>
+            <input type="hidden" name="aksi" value="penilai2_simpan">
+            <?php if (!$daftarPengawas): ?>
+                <p class="mut mb0">Belum ada akun pengawas lain yang dapat dipilih sebagai
+                    <?= e(penilai_posisi_teks('2')) ?>. Akun pengawas dibuat Super Admin lewat menu
+                    <b>Akun Penilai</b> (atau ditarik dari aplikasi Supervisi).</p>
+            <?php endif; ?>
+            <div class="geser"><table class="tbl penilai-binaan" id="tblBinaanSaya">
+                <thead><tr><th class="tengah">No</th><th>Madrasah</th><th>Kecamatan</th>
+                    <th>Posisi Saya</th><th class="kolom-penilai2"><?= e(penilai_posisi_teks('2')) ?></th></tr></thead>
+                <tbody>
+                <?php foreach ($binaanSaya as $i => $b):
+                    $sidb = (int)$b['id'];
+                    $ketuaB = $b['ketua'];
+                    $p2B = $b['penilai2'];
+                    $sayaKetua = (int)$b['posisi'] === 1; ?>
+                    <tr data-binaan-baris>
+                        <td class="tengah"><?= $i + 1 ?></td>
+                        <td><b><?= e($b['nama']) ?></b>
+                            <div class="kecil mut"><?= e(status_lembaga_label($b['status_lembaga'])) ?></div></td>
+                        <td class="kecil"><?= e($b['kecamatan'] !== '' ? $b['kecamatan'] : '-') ?></td>
+                        <td class="kecil">
+                            <?php if ($sayaKetua): ?>
+                                <span class="pil pil-unggul"><?= e(penilai_posisi_teks('1')) ?></span>
+                            <?php elseif ((int)$b['posisi'] === 2): ?>
+                                <span class="pil pil-baik"><?= e(penilai_posisi_teks('2')) ?></span>
+                                <div class="mut">Ketua Tim:
+                                    <?= $ketuaB ? e((string)$ketuaB['nama']) : '-' ?></div>
+                            <?php elseif ($ketuaB): ?>
+                                <span class="pil pil-kurang">posisi belum ada</span>
+                                <div class="mut">Sudah dinilai <b><?= e((string)$ketuaB['nama']) ?></b>
+                                    (<?= e(penilai_posisi_teks('1')) ?>)</div>
+                            <?php else: ?>
+                                <span class="mut">belum ada penugasan</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="kecil">
+                            <?php if ($sayaKetua && $daftarPengawas): ?>
+                                <select name="penilai2[<?= $sidb ?>]" id="penilai2Sek<?= $sidb ?>"
+                                        <?= $p2B ? '' : '' ?>>
+                                    <option value="0">— belum ditentukan —</option>
+                                    <?php foreach ($daftarPengawas as $dp):
+                                        $dipilih = $p2B && (int)$p2B['id'] === (int)$dp['id']; ?>
+                                        <option value="<?= (int)$dp['id'] ?>" <?= $dipilih ? 'selected' : '' ?>>
+                                            <?= e((string)$dp['nama']
+                                                . (trim((string)($dp['jabatan'] ?? '')) !== ''
+                                                    ? ' — ' . (string)$dp['jabatan'] : '')) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            <?php else: ?>
+                                <?= $p2B ? e((string)$p2B['nama']) : '<span class="mut">belum ditentukan</span>' ?>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table></div>
+            <?php if ($daftarPengawas): ?>
+            <div class="form-aksi">
+                <button class="btn" type="submit"><?= ikon('simpan', 16) ?> Simpan Penilai 2</button>
+            </div>
+            <?php endif; ?>
+        </form>
+    </div>
+    <?php endif; ?>
+
+    <!-- ============ PILIH MADRASAH & POSISI (hanya akun penilai tanpa peta binaan) ============ -->
+    <?php if (!$binaanSaya): ?>
     <div class="card" id="cardPilihMadrasah">
         <div class="card-kepala"><h2>Pilih Madrasah yang Akan Dinilai</h2>
             <span class="pil pil-unggul"><?= $jmlPilih ?> dipilih</span>
         </div>
         <?php if ($jabatanPengawasSaya): ?>
-        <p class="ket">Centang madrasah yang akan Anda nilai, lalu tentukan posisi Anda
-            (<b>Penilai 1</b> atau <b>Penilai 2</b>). Satu posisi pada satu madrasah hanya boleh dipegang
-            satu penilai, sehingga posisi yang sudah dipegang penilai lain tidak dapat dipilih.</p>
+        <p class="ket">Akun Anda belum terhubung dengan peta pengawas binaan aplikasi Supervisi, sehingga
+            madrasah dipilih sendiri di sini. Centang madrasah yang akan Anda nilai, lalu tentukan posisi
+            Anda (<b>Penilai 1</b> atau <b>Penilai 2</b>). Satu posisi pada satu madrasah hanya boleh
+            dipegang satu penilai, sehingga posisi yang sudah dipegang penilai lain tidak dapat dipilih.</p>
         <form method="post" action="index.php" id="formPilihMadrasah">
             <?= csrf_field() ?>
             <input type="hidden" name="aksi" value="tugas_simpan">
@@ -280,12 +418,14 @@ if ($u['role'] === 'pengawas' && !$s) {
         </form>
         <?php endif; ?>
     </div>
+    <?php endif; /* !$binaanSaya */ ?>
 
     <div class="card">
         <div class="card-kepala"><h2>Madrasah yang akan dinilai</h2></div>
         <?php if (!$tugas): ?>
-            <p class="mut mb0">Belum ada madrasah yang Anda pilih. Pilih madrasah pada kartu
-                <b>Pilih Madrasah yang Akan Dinilai</b> di atas.</p>
+            <p class="mut mb0">Belum ada madrasah yang Anda pilih.<?= $binaanSaya
+                ? ' Binaan Anda muncul otomatis pada kartu <b>Madrasah Binaan Saya</b> di atas.'
+                : ' Pilih madrasah pada kartu <b>Pilih Madrasah yang Akan Dinilai</b> di atas.' ?></p>
         <?php else: ?>
         <div class="geser"><table class="tbl">
             <thead><tr><th>No</th><th>Madrasah</th><th>Posisi Anda</th><th class="tengah">Penilaian Terisi</th>
@@ -361,12 +501,15 @@ if ($u['role'] === 'super' && !$s) {
 
     <div class="card">
         <div class="card-kepala"><h2>Daftar Madrasah</h2>
-            <div class="aksi"><a class="btn btn-emas btn-kecil" href="sekolah.php"><?= ikon('check', 15) ?> Persetujuan Madrasah<?php $dm = daftar_menunggu_jumlah(); ?><?= $dm > 0 ? ' (' . $dm . ')' : '' ?></a></div>
+            <div class="aksi">
+                <a class="btn btn-ghost btn-kecil" href="sekolah.php"><?= ikon('madrasah', 15) ?> Kelola Madrasah</a>
+                <a class="btn btn-emas btn-kecil" href="tarik_supervisi.php"><?= ikon('unduh', 15) ?> Tarik dari Supervisi</a>
+            </div>
         </div>
         <?php if (!$daftar): ?>
-            <p class="mut mb0">Belum ada madrasah. Madrasah mendaftar sendiri lewat
-                <a href="daftar.php" target="_blank" rel="noopener">halaman Pendaftaran Madrasah</a>,
-                lalu pendaftarannya disetujui pada menu <b>Persetujuan Madrasah</b>.</p>
+            <p class="mut mb0">Belum ada madrasah. Tarik lembaga berstatus aktif dari aplikasi
+                Supervisi pada menu <a href="tarik_supervisi.php">Tarik dari Supervisi</a> &mdash;
+                madrasah, kepala madrasah, dan pengawas masuk otomatis.</p>
         <?php else: ?>
         <div class="geser"><table class="tbl">
             <thead><tr><th>No</th><th>Madrasah</th><th>Kepala Madrasah</th>
@@ -408,7 +551,8 @@ $komp = rekap_komponen_tahun4($sid);
 $posisiSaya = $u['role'] === 'pengawas' ? pengawas_posisi_di((int)$u['id'], $sid) : 0;
 
 page_top('Dashboard Madrasah', e($s['nama']) . ' &middot; Tahun penilaian '
-    . ($s['tahun_1'] ? (int)$s['tahun_1'] : '-') . ' s.d. ' . ($s['tahun_4'] ? (int)$s['tahun_4'] : '-'));
+    . (($th1D = tahun_penilaian_tampil($sid, $s, 1)) !== '' ? $th1D : '-') . ' s.d. '
+    . (($th4D = tahun_penilaian_tampil($sid, $s, 4)) !== '' ? $th4D : '-'));
 ?>
 <div class="grid g4">
     <div class="card stat"><?= ikon('nilai', 20) ?><div>
@@ -590,7 +734,7 @@ if ($u['role'] === 'admin'):
         <?php foreach ($rekap as $tahun => $r): ?>
             <tr>
                 <td><b><?= e(pilihan_tahun((int)$tahun)) ?></b>
-                    <div class="kecil mut"><?= e($s['tahun_' . $tahun] ? (string)(int)$s['tahun_' . $tahun] : 'tahun belum diisi') ?></div></td>
+                    <div class="kecil mut"><?= e(($thI = tahun_penilaian_tampil($sid, $s, (int)$tahun)) !== '' ? $thI : 'tahun belum diisi') ?></div></td>
                 <td class="tengah"><?= n2($r['kode']['1']['nilai'] ?? null) ?></td>
                 <td class="tengah"><?= n2($r['kode']['2']['nilai'] ?? null) ?></td>
                 <td class="tengah"><b><?= n2($r['rerata']) ?></b></td>

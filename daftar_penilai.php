@@ -5,10 +5,13 @@
  * Permintaan pemilik: pada kartu login di samping "Pendaftaran Madrasah" ditambahkan
  * "Pendaftaran Penilai" dengan formulir pendaftaran + daftar akun & sandinya.
  *
- * Penilai (Kabag, Kasie, Pengawas, Guru, Komite — daftar jabatan diisi Super Admin) mendaftar
- * sendiri: akun dibuat berperan `pengawas` (status tetap pengawas) dan LANGSUNG dapat dipakai
- * masuk. Setelah masuk, penilai memilih sendiri madrasah yang dinilai beserta posisinya
- * (Penilai 1 / Penilai 2) pada halaman Dashboard Penilai.
+ * Penilai dengan jabatan SELAIN PENGAWAS (Kabag, Kasie, Guru, Tendik, Komite, Kabid, Yayasan —
+ * daftar jabatan diisi Super Admin) mendaftar sendiri di sini: akun dibuat berperan `pengawas`
+ * (status internal tetap pengawas) dan LANGSUNG dapat dipakai masuk.
+ *
+ * Sejak v1.11.0 (permintaan pemilik) **jabatan pengawas TIDAK mendaftar di halaman ini**: akun
+ * pengawas beserta penugasan Penilai 1 & 2 ditarik Super Admin dari aplikasi Supervisi
+ * (`tarik_supervisi.php`). Pendaftaran madrasah mandiri juga sudah DIHAPUS.
  *
  * Halaman ini menampilkan kembali AKUN + KATA SANDI yang baru didaftarkan pada sesi ini
  * (kata sandi tidak pernah bisa ditampilkan lagi setelah sesi berakhir).
@@ -25,7 +28,7 @@ $sukses = isset($_GET['ok']);
 $nilai = ['nama' => '', 'nip' => '', 'jabatan' => '', 'instansi' => '', 'kab_kota' => '', 'hp' => ''];
 $nilaiAkun = ['username' => ''];
 $cap = penilai_captcha_baru();
-$jabatanList = jabatan_penilai_list(true);
+$jabatanList = jabatan_penilai_daftar_list();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_ok()) {
@@ -46,6 +49,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($nilai['jabatan'] === '') {
             $galat[] = 'Jabatan wajib dipilih.';
+        } elseif (jabatan_pengawas_nama($nilai['jabatan'])) {
+            $galat[] = 'Jabatan pengawas tidak mendaftar di sini — akun pengawas ditarik Super Admin '
+                . 'dari aplikasi Supervisi. Silakan pilih jabatan lain.';
         } elseif (!jabatan_penilai_sah($nilai['jabatan'])) {
             $galat[] = 'Jabatan yang dipilih tidak tersedia. Muat ulang halaman lalu pilih dari daftar.';
         }
@@ -110,7 +116,7 @@ $petunjuk = [
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Pendaftaran Penilai - <?= e(APP_NAME) ?></title>
-<meta name="description" content="Pendaftaran penilai (pengawas, Kabag, Kasie, Guru, Komite) aplikasi <?= e(APP_NAME) ?>.">
+<meta name="description" content="Pendaftaran penilai (Kabag, Kasie, Guru, Tendik, Komite, Kabid, Yayasan) aplikasi <?= e(APP_NAME) ?>.">
 <link rel="stylesheet" href="assets/style.css?v=<?= e(APP_VERSION) ?>">
 <link rel="icon" href="data:image/svg+xml,<?= rawurlencode('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" fill="#0b4a33"/><path d="M12 4l8 5v11H4V9z" fill="#c9a227"/></svg>') ?>">
 </head>
@@ -126,9 +132,6 @@ $petunjuk = [
         <button class="lp-nav-tombol" type="button" data-lp-menu aria-label="Buka menu"><?= ikon('menu', 20) ?></button>
         <nav class="lp-nav-menu" id="lpMenu">
             <a href="login.php">Beranda</a>
-            <a href="login.php#fitur">Fitur</a>
-            <a href="daftar.php">Pendaftaran Madrasah</a>
-            <a href="login.php#kontak">Kontak</a>
             <a class="lp-nav-masuk" href="login.php#masuk">Masuk</a>
         </nav>
     </div>
@@ -186,9 +189,11 @@ $petunjuk = [
 
         <div class="df-kepala">
             <h1 class="lp-judul kiri">Daftarkan Akun Penilai</h1>
-            <p class="df-kepala-sub">Formulir untuk <b>pengawas / Kabag / Kasie / Guru / Komite</b> yang bertugas
-                menilai kinerja kepala madrasah. Akun penilai <b>langsung aktif</b>; setelah masuk, pilih
-                madrasah yang Anda nilai beserta posisinya.</p>
+            <p class="df-kepala-sub">Formulir untuk <b>Kabag / Kasie / Guru / Tendik / Komite / Kabid / Yayasan</b>
+                yang bertugas menilai kinerja kepala madrasah. Akun penilai <b>langsung aktif</b>; setelah masuk,
+                pilih madrasah yang Anda nilai beserta posisinya.</p>
+            <p class="df-kepala-sub"><b>Jabatan pengawas tidak mendaftar di halaman ini</b> &mdash; akun
+                pengawas beserta penugasannya ditarik Super Admin dari aplikasi Supervisi.</p>
         </div>
 
         <div class="df-grid">
@@ -302,8 +307,7 @@ $petunjuk = [
                     <button type="button" class="btn btn-emas" data-df-maju hidden>Lanjut</button>
                     <button class="btn" type="submit" id="pKirim"><?= ikon('simpan', 16) ?> Kirim Pendaftaran</button>
                 </div>
-                <p class="ket mt8 mb0">Madrasah yang belum terdaftar? Daftarkan lewat
-                    <a href="daftar.php">Pendaftaran Madrasah</a>. Sudah punya akun?
+                <p class="ket mt8 mb0">Sudah punya akun?
                     <a href="login.php#masuk">Masuk di sini</a>.</p>
             </form>
 
@@ -312,18 +316,20 @@ $petunjuk = [
                 <div class="card lp-daftar-kartu">
                     <h2>Untuk Siapa?</h2>
                     <ul class="df-cek">
-                        <li>Pengawas madrasah (Pengawas I / II)</li>
                         <li>Kepala Bagian &amp; Kepala Seksi (Kabag / Kasie)</li>
-                        <li>Guru dan Komite Madrasah sebagai penilai</li>
+                        <li>Guru, Tenaga Kependidikan, dan Komite Madrasah</li>
+                        <li>Kabid (Kepala Bidang) atau Yayasan sebagai penilai Tahun Keempat</li>
                         <li>Satu akun untuk satu penilai; jabatan dipilih saat mendaftar</li>
                     </ul>
+                    <p class="ket mb0 mt8">Pengawas <b>tidak</b> mendaftar di sini — akun pengawas ditarik
+                        Super Admin dari aplikasi Supervisi.</p>
                 </div>
                 <div class="card lp-daftar-kartu">
                     <h2>Bagaimana Alurnya?</h2>
                     <ol class="df-alur">
                         <li><b>Isi formulir</b><span>Data penilai + akun (nama pengguna &amp; kata sandi).</span></li>
                         <li><b>Akun langsung aktif</b><span>Nama pengguna &amp; kata sandi tampil setelah mendaftar.</span></li>
-                        <li><b>Pilih madrasah</b><span>Centang madrasah yang dinilai &amp; tentukan posisi Penilai 1/2.</span></li>
+                        <li><b>Pilih madrasah</b><span>Centang madrasah yang akan dinilai pada Tahun Keempat.</span></li>
                         <li><b>Mulai menilai</b><span>Isi penilaian kepala madrasah pada menu penilaian.</span></li>
                     </ol>
                 </div>

@@ -97,7 +97,7 @@ ob_start();
             <div class="rk-sub">Identitas Kepala Madrasah</div>
             <?= rk_ident_html($barisKepala) ?>
 
-            <p class="rk-ayat"><?= e(rekap_kalimat_penilaian('Penilaian Kinerja Tahunan', rekap_isi_teks($s['tahun_' . $tahun] ?? ''))) ?></p>
+            <p class="rk-ayat"><?= e(rekap_kalimat_penilaian('Penilaian Kinerja Tahunan', rekap_isi_teks(tahun_penilaian_tampil($sid, $s, (int)$tahun)))) ?></p>
 
             <table class="<?= e($kelasTbl) ?>">
                 <colgroup><col class="rk-no"><col><?php for ($i = 0; $i < $jmlKanan; $i++): ?><col class="rk-num"><?php endfor; ?></colgroup>
@@ -142,7 +142,7 @@ ob_start();
         <div class="rk-sub">Identitas Kepala Madrasah</div>
         <?= rk_ident_html($barisKepala) ?>
 
-        <p class="rk-ayat"><?= e(rekap_kalimat_penilaian('Penilaian Kinerja Tahun Keempat', rekap_isi_teks($s['tahun_4'] ?? ''))) ?></p>
+        <p class="rk-ayat"><?= e(rekap_kalimat_penilaian('Penilaian Kinerja Tahun Keempat', rekap_isi_teks(tahun_penilaian_tampil($sid, $s, 4)))) ?></p>
         <p class="rk-note">Dinilai oleh <?= count($slotRekap) ?> penilai Tahun Keempat
             (<?= e(status_lembaga_label(status_lembaga_sekolah($sid))) ?>:
             <?= e(implode(', ', array_map(fn($sl) => $sl['label'], $slotRekap))) ?>).</p>
@@ -185,7 +185,7 @@ ob_start();
         <div class="rk-sub">Identitas Kepala Madrasah</div>
         <?= rk_ident_html($barisKepala) ?>
 
-        <p class="rk-ayat"><?= e(rekap_kalimat_penilaian('Penilaian Kinerja Empat Tahunan', rekap_isi_teks($s['tahun_4'] ?? ''))) ?></p>
+        <p class="rk-ayat"><?= e(rekap_kalimat_penilaian('Penilaian Kinerja Empat Tahunan', rekap_isi_teks(tahun_penilaian_tampil($sid, $s, 4)))) ?></p>
 
         <table class="tbl rk-tbl">
             <colgroup><col class="rk-no"><col><col class="rk-num"></colgroup>

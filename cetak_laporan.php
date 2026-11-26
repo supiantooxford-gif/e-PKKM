@@ -102,10 +102,13 @@ ob_start();
                 ? $pen['tanggal_' . $tahun] : (string)($s['tanggal_' . $tahun] ?? '');
             $labelTahun = PKKM_TAHUN_LIST[$tahun];
             $labelPenilai = penilai_posisi_teks($kode, status_lembaga_sekolah($sid));
-            $nilai = $r['nilai'] ?? null; ?>
+            $nilai = $r['nilai'] ?? null;
+            // Tahun penilaian (permintaan pemilik: dicetak di bawah subjudul, di tengah)
+            $tahunCetak = rekap_isi_teks(tahun_penilaian_tampil($sid, $s, (int)$tahun)); ?>
             <div class="sheet rk-sheet" data-tahun="<?= (int)$tahun ?>" data-posisi="<?= e($kode) ?>">
                 <div class="rk-judul">Laporan Hasil Penilaian Kinerja Tahunan Kepala Madrasah</div>
                 <div class="rk-judul2"><?= e($labelTahun) ?> &mdash; <?= e($labelPenilai) ?></div>
+                <div class="rk-tahun">Tahun Penilaian <?= e($tahunCetak !== '' ? $tahunCetak : '-') ?></div>
 
                 <p class="rk-ayat">Yang bertanda tangan di bawah ini:</p>
                 <div class="rk-sub">Identitas Penilai</div>
@@ -124,7 +127,7 @@ ob_start();
                 </tbody></table>
 
                 <p class="rk-ayat"><?= e(rekap_kalimat_penilaian('Penilaian Kinerja Tahunan',
-                    rekap_isi_teks($s['tahun_' . $tahun] ?? ''))) ?></p>
+                    $tahunCetak)) ?></p>
 
                 <table class="tbl rk-tbl">
                     <colgroup><col class="rk-no"><col><col class="rk-num"><col class="rk-num"></colgroup>

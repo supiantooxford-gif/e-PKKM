@@ -19,7 +19,7 @@ page_top('Laporan', 'Rekapan hasil PKKM Pengawas I dan Pengawas II, Tahun Pertam
         <div><span>Madrasah:</span> <b><?= e($s['nama']) ?></b></div>
         <div><span>Kepala Madrasah:</span> <b><?= e($s['kepala_nama'] ?: '-') ?></b></div>
         <div><span>NIP:</span> <b><?= e($s['kepala_nip'] ?: '-') ?></b></div>
-        <div><span>Tahun penilaian:</span> <b><?= (int)($s['tahun_1'] ?: 0) ?: '-' ?> s.d. <?= (int)($s['tahun_4'] ?: 0) ?: '-' ?></b></div>
+        <div><span>Tahun penilaian:</span> <b><?= e(($t1L = tahun_penilaian_tampil($sid, $s, 1)) !== '' ? $t1L : '-') ?> s.d. <?= e(($t4L = tahun_penilaian_tampil($sid, $s, 4)) !== '' ? $t4L : '-') ?></b></div>
     </div>
     <div class="form-aksi">
         <a class="btn" href="cetak_laporan.php?semua=1" target="_blank" rel="noopener"><?= ikon('cetak', 16) ?> Cetak Laporan (semua tahun)</a>
@@ -50,7 +50,7 @@ page_top('Laporan', 'Rekapan hasil PKKM Pengawas I dan Pengawas II, Tahun Pertam
             <tr>
                 <td class="tengah"><?= $noL ?></td>
                 <td><b><?= e($label) ?></b>
-                    <div class="kecil mut"><?= e($s['tahun_' . $tahun] ? 'tahun ' . (int)$s['tahun_' . $tahun] : 'tahun belum diisi') ?></div></td>
+                    <div class="kecil mut"><?= e(($thL = tahun_penilaian_tampil($sid, $s, (int)$tahun)) !== '' ? 'tahun ' . $thL : 'tahun belum diisi') ?></div></td>
                 <td class="tengah"><?= $t1 !== '' ? e(tanggal_id($t1)) : '<span class="mut kecil">belum diisi</span>' ?></td>
                 <td class="tengah"><?= $t2 !== '' ? e(tanggal_id($t2)) : '<span class="mut kecil">belum diisi</span>' ?></td>
                 <td class="tengah"><b><?= n2($rekap[$tahun]['rerata']) ?></b>

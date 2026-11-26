@@ -9,20 +9,28 @@
  *  - Seluruh isi ensure_schema() dijalankan dalam SATU transaksi (BEGIN IMMEDIATE).
  */
 
-const SCHEMA_VERSION = '8';
+const SCHEMA_VERSION = '12';
 
 /** Tabel yang WAJIB ada. */
 const SCHEMA_TABEL_WAJIB = ['app_pengaturan', 'sekolah', 'users', 'pengawas_sekolah', 'penilai', 'penilaian',
     'penilaian_butir', 'landing_slider', 'landing_fitur', 'landing_unggulan', 'landing_testimoni', 'landing_pesan',
-    'dokumen_butir', 'butir_komentar', 'jabatan_penilai'];
+    'dokumen_butir', 'butir_komentar', 'jabatan_penilai', 'depan_slider',
+    // v11 - Log Aktivitas (Super Admin): riwayat masuk/keluar/gagal + daftar sesi online
+    'log_aktivitas', 'sesi_aktif'];
 
 /** Kolom yang WAJIB ada (boleh daftar per tabel). */
 const SCHEMA_KOLOM_WAJIB = [
     'sekolah' => ['tahun_1', 'tahun_2', 'tahun_3', 'tahun_4', 'tanggal_1', 'tempat',
-        'daftar_status', 'daftar_pada', 'daftar_alasan', 'status_lembaga'],
-    'users' => ['foto', 'nip', 'jabatan', 'instansi', 'kab_kota', 'hp', 'asal'],
+        'daftar_status', 'daftar_pada', 'daftar_alasan', 'status_lembaga',
+        // v9 - penanda asal data (tarik dari aplikasi Supervisi)
+        'supervisi_id', 'sumber'],
+    'users' => ['foto', 'nip', 'jabatan', 'instansi', 'kab_kota', 'hp', 'asal',
+        // v9 - penanda akun hasil tarikan Supervisi + sandi Supervisi terakhir
+        'supervisi_id', 'sandi_supervisi'],
     'penilaian' => ['status', 'diisi_oleh'],
     'penilai' => ['kategori', 'kode', 'user_id'],
+    // v12 - dokumen butir boleh berupa TAUTAN Google Drive (tautan = 1), bukan hanya berkas unggahan
+    'dokumen_butir' => ['tautan'],
 ];
 
 if (!function_exists('db_add_column')) {
@@ -284,6 +292,8 @@ if (!function_exists('ensure_schema')) {
                 daftar_pada TEXT,
                 daftar_alasan TEXT,
                 status_lembaga TEXT NOT NULL DEFAULT 'swasta',
+                supervisi_id INTEGER,
+                sumber TEXT NOT NULL DEFAULT 'manual',
                 dibuat TEXT,
                 diubah TEXT
             )");
@@ -303,8 +313,57 @@ if (!function_exists('ensure_schema')) {
                 kab_kota TEXT,
                 hp TEXT,
                 asal TEXT,
+                supervisi_id INTEGER,
+                sandi_supervisi TEXT,
                 dibuat TEXT
             )");
+
+            // v11 - LOG AKTIVITAS (permintaan pemilik: "Pada akun Super Admin tambahkan fitur log
+            // aktifitas seperti aplikasi e-Guru termasuk hapus riwayatnya").
+            // Nama akun & nama madrasah disimpan sebagai SNAPSHOT supaya riwayat tetap terbaca
+            // walau akun/madrasahnya kelak dihapus (relasinya SET NULL, bukan CASCADE).
+            $pdo->exec("CREATE TABLE IF NOT EXISTS log_aktivitas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+                nama TEXT,
+                username TEXT,
+                role TEXT,
+                sekolah_id INTEGER REFERENCES sekolah(id) ON DELETE SET NULL,
+                sekolah TEXT,
+                aktivitas TEXT NOT NULL,
+                keterangan TEXT,
+                ip TEXT,
+                peramban TEXT,
+                waktu TEXT NOT NULL
+            )");
+            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_log_waktu ON log_aktivitas (waktu)');
+            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_log_aktivitas ON log_aktivitas (aktivitas)');
+
+            // Sesi yang masih berjalan → dasar daftar "sedang online". `id` adalah HASH id sesi;
+            // id sesi yang sebenarnya tidak pernah disimpan.
+            $pdo->exec("CREATE TABLE IF NOT EXISTS sesi_aktif (
+                id TEXT PRIMARY KEY,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                ip TEXT,
+                peramban TEXT,
+                mulai TEXT NOT NULL,
+                terakhir TEXT NOT NULL
+            )");
+            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_sesi_aktif_terakhir ON sesi_aktif (terakhir)');
+
+            // v10 - SLIDER GAMBAR HALAMAN DEPAN (permintaan pemilik): gambar yang diisi Super Admin
+            // pada area ilustrasi halaman masuk. Hanya URL hasil media proxy yang disimpan.
+            $pdo->exec("CREATE TABLE IF NOT EXISTS depan_slider (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                foto TEXT NOT NULL,
+                judul TEXT,
+                keterangan TEXT,
+                urutan INTEGER NOT NULL DEFAULT 10,
+                aktif INTEGER NOT NULL DEFAULT 1,
+                dibuat TEXT,
+                diubah TEXT
+            )");
+            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_depan_slider ON depan_slider (aktif, urutan, id)');
 
             // Daftar JABATAN penilai (GLOBAL, diisi Super Admin). Jabatan dipilih penilai saat
             // mendaftar sendiri lewat halaman `daftar_penilai.php`.
@@ -447,7 +506,8 @@ if (!function_exists('ensure_schema')) {
                 ukuran INTEGER NOT NULL DEFAULT 0,
                 pengunggah TEXT,
                 pengunggah_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-                dibuat TEXT
+                dibuat TEXT,
+                tautan INTEGER NOT NULL DEFAULT 0
             )");
             $pdo->exec('CREATE INDEX IF NOT EXISTS idx_dokumen_butir ON dokumen_butir (sekolah_id, tahun, butir)');
 
@@ -489,6 +549,9 @@ if (!function_exists('ensure_schema')) {
             $pdo->exec("UPDATE sekolah SET status_lembaga = 'swasta'
                          WHERE status_lembaga IS NULL OR TRIM(status_lembaga) = ''
                             OR LOWER(TRIM(status_lembaga)) NOT IN ('negeri', 'swasta')");
+            // v12 (v1.19.0) - dokumen butir boleh berupa TAUTAN Google Drive, bukan hanya berkas
+            // unggahan. `url` menyimpan tautannya, `ukuran` = 0, `tautan` = 1.
+            db_add_column('dokumen_butir', 'tautan', 'INTEGER NOT NULL DEFAULT 0');
             db_add_column('penilaian', 'status', "TEXT NOT NULL DEFAULT 'draft'");
             db_add_column('penilaian', 'diisi_oleh', 'INTEGER');
             db_add_column('penilaian', 'diisi_nama', 'TEXT');
@@ -503,6 +566,14 @@ if (!function_exists('ensure_schema')) {
             db_add_column('users', 'kab_kota', 'TEXT');
             db_add_column('users', 'hp', 'TEXT');
             db_add_column('users', 'asal', 'TEXT');
+            // v9 - TARIK DATA DARI APLIKASI SUPERVISI (v1.11.0): penanda asal data + sandi Supervisi
+            // terakhir yang disalin (dipakai menentukan apakah sandi sudah diganti sendiri di e-PKKM).
+            db_add_column('sekolah', 'supervisi_id', 'INTEGER');
+            db_add_column('sekolah', 'sumber', "TEXT NOT NULL DEFAULT 'manual'");
+            db_add_column('users', 'supervisi_id', 'INTEGER');
+            db_add_column('users', 'sandi_supervisi', 'TEXT');
+            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_sekolah_supervisi ON sekolah (supervisi_id)');
+            $pdo->exec('CREATE INDEX IF NOT EXISTS idx_users_supervisi ON users (supervisi_id)');
 
             // ---------- daftar JABATAN penilai bawaan (SEKALI; suntingan Super Admin tidak ditimpa) ----------
             $jabatanAda = (int)$pdo->query('SELECT COUNT(*) FROM jabatan_penilai')->fetchColumn();

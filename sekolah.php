@@ -1,11 +1,14 @@
 <?php
 /**
- * e-PKKM - PERSETUJUAN MADRASAH (khusus Super Admin).
+ * e-PKKM - KELOLA MADRASAH (khusus Super Admin).
  *
- * Tambah madrasah manual DIHAPUS (permintaan pemilik): madrasah mendaftar sendiri lewat halaman
- * publik `daftar.php` dengan mengisi identitas lembaga + akun kepala madrasah. Di halaman ini
- * Super Admin menyetujui/mengaktifkan, menolak (ber-alasan), mengubah data, mengelola akun,
- * menonaktifkan, menghapus, dan masuk konteks madrasah.
+ * Sejak v1.11.0 (permintaan pemilik) **pendaftaran madrasah mandiri DIHAPUS**: lembaga, kepala
+ * madrasah, dan pengawas masuk lewat menu "Tarik dari Supervisi" (`tarik_supervisi.php`) yang
+ * membaca aplikasi Supervisi Guru. Di halaman ini Super Admin mengubah identitas & status lembaga,
+ * mengelola akun, menonaktifkan, menghapus, dan masuk konteks madrasah.
+ *
+ * Sisa data pendaftaran LAMA (status `menunggu`/`ditolak`) tetap ditampilkan bila ada — supaya
+ * lembaga yang telanjur mendaftar sebelum fitur ini dihapus masih dapat diselesaikan.
  */
 require_once __DIR__ . '/inc/init.php';
 $u = require_super();
@@ -21,10 +24,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $aksi = (string)($_POST['aksi'] ?? '');
     $id = (int)($_POST['id'] ?? 0);
 
-    // ---------------- PERSETUJUAN / PENGAKTIFAN PENDAFTAR ----------------
-    // Madrasah TIDAK lagi ditambah manual oleh Super Admin: pendaftar mengisi sendiri lewat
-    // halaman publik `daftar.php` (identitas lembaga + akun kepala madrasah). Di sini Super Admin
-    // menyetujui/mengaktifkan atau menolak pendaftaran tersebut.
+    // ---------------- PERSETUJUAN / PENGAKTIFAN (sisa data pendaftaran LAMA) ----------------
+    // Pendaftaran mandiri madrasah sudah DIHAPUS (v1.11.0): lembaga ditarik dari aplikasi
+    // Supervisi. Aksi ini dipertahankan hanya agar lembaga yang telanjur mendaftar sebelum fitur
+    // dihapus masih bisa diselesaikan/diaktifkan.
     if ($aksi === 'setujui' || $aksi === 'aktifkan') {
         $s2 = $id > 0 ? one('SELECT * FROM sekolah WHERE id = ?', [$id]) : null;
         if (!$s2) {
@@ -158,13 +161,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             flash('Penghapusan dibatalkan: ketik HAPUS untuk menyetujui.', 'err');
             redirect('sekolah.php');
         }
-        if ((int)val('SELECT COUNT(*) FROM sekolah') <= 1) {
-            flash('Tidak dapat menghapus madrasah terakhir.', 'err');
-            redirect('sekolah.php');
-        }
+        // v1.12.0 (permintaan pemilik): "Super admin bisa menghapus semua madrasah/sekolah" —
+        // madrasah TERAKHIR pun boleh dihapus (dulu ditolak). Data ikutannya dibersihkan lebih dulu
+        // karena cascade SQLite tidak selalu aktif.
         $dampak = sekolah_dampak($id);
         mulai_transaksi();
         try {
+            q('DELETE FROM penilaian_butir WHERE penilaian_id IN (SELECT id FROM penilaian WHERE sekolah_id = ?)', [$id]);
+            q('DELETE FROM butir_komentar WHERE sekolah_id = ?', [$id]);
+            q('DELETE FROM dokumen_butir WHERE sekolah_id = ?', [$id]);
+            q('DELETE FROM penilaian WHERE sekolah_id = ?', [$id]);
+            q('DELETE FROM penilai WHERE sekolah_id = ?', [$id]);
+            q('DELETE FROM pengawas_sekolah WHERE sekolah_id = ?', [$id]);
+            q("UPDATE users SET sekolah_id = NULL WHERE sekolah_id = ? AND role <> 'super'", [$id]);
             q('DELETE FROM sekolah WHERE id = ?', [$id]);
             selesai_transaksi(true);
             flash('Madrasah "' . $s2['nama'] . '" dihapus permanen (' . $dampak . ').');
@@ -176,6 +185,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             mulai_sesi();
             unset($_SESSION['ctx_sekolah_id']);
         }
+        redirect('sekolah.php');
+    }
+
+    // ---------------- HAPUS SEMUA MADRASAH + akun pengawas/kepala (v1.12.0) ----------------
+    if ($aksi === 'hapus_semua') {
+        if (trim((string)($_POST['konfirmasi'] ?? '')) !== 'HAPUS SEMUA') {
+            flash('Penghapusan dibatalkan: ketik HAPUS SEMUA untuk menyetujui.', 'err');
+            redirect('sekolah.php#cardHapusSemua');
+        }
+        try {
+            $hasil = pkkm_hapus_lembaga_semua(true);
+        } catch (Throwable $t) {
+            flash('Gagal membersihkan data: ' . $t->getMessage(), 'err');
+            redirect('sekolah.php');
+        }
+        mulai_sesi();
+        unset($_SESSION['ctx_sekolah_id']);
+        flash('Seluruh data berhasil dibersihkan: ' . $hasil['sekolah'] . ' madrasah, '
+            . $hasil['akun'] . ' akun pengawas & kepala madrasah, ' . $hasil['penilaian']
+            . ' penilaian, ' . $hasil['penugasan'] . ' penugasan penilai. Akun Super Admin tetap ada.');
         redirect('sekolah.php');
     }
 
@@ -202,24 +231,21 @@ $daftar = all('SELECT * FROM sekolah ORDER BY aktif DESC, nama');
 $pendaftar = daftar_pendaftar_list('menunggu');
 $ditolak = daftar_pendaftar_list('ditolak');
 
-page_top('Persetujuan Madrasah',
-    'Super Admin &middot; tinjau pendaftaran madrasah (identitas lembaga + akun kepala madrasah), '
-    . 'lalu setujui/aktifkan atau tolak.');
+page_top('Kelola Madrasah',
+    'Super Admin &middot; data lembaga, akun kepala madrasah, status aktif, dan konteks madrasah. '
+    . 'Lembaga baru ditarik dari aplikasi Supervisi.');
 ?>
-<!-- ============================ PENDAFTAR MENUNGGU PERSETUJUAN ============================ -->
+<?php if ($pendaftar): ?>
+<!-- ============ SISA PENDAFTARAN LAMA (pendaftaran mandiri sudah dihapus v1.11.0) ============ -->
 <div class="card" id="pendaftar">
     <div class="card-kepala">
         <h2>Pendaftar Menunggu Persetujuan
-            <?php if ($pendaftar): ?><span class="pil pil-cukup"><?= count($pendaftar) ?> baru</span><?php endif; ?>
+            <span class="pil pil-cukup"><?= count($pendaftar) ?> baru</span>
         </h2>
-        <div class="aksi"><a class="btn btn-kecil btn-ghost" href="daftar.php" target="_blank" rel="noopener">
-            <?= ikon('buka', 15) ?> Halaman Pendaftaran</a></div>
     </div>
-    <?php if (!$pendaftar): ?>
-        <p class="mut mb0">Belum ada pendaftar baru. Madrasah mendaftar sendiri lewat halaman
-            <b>Pendaftaran Madrasah</b>; pendaftarannya muncul di sini untuk ditinjau.</p>
-    <?php else: ?>
-        <div class="df-tinjau-grid">
+    <p class="mut kecil">Data ini berasal dari pendaftaran <b>sebelum</b> fitur pendaftaran madrasah
+        dihapus. Lembaga baru sekarang ditarik Super Admin dari aplikasi Supervisi.</p>
+    <div class="df-tinjau-grid">
         <?php foreach ($pendaftar as $p): $pid = (int)$p['id']; $akun = daftar_akun_kepala($pid); ?>
             <div class="df-tinjau">
                 <div class="df-tinjau-kepala">
@@ -268,35 +294,7 @@ page_top('Persetujuan Madrasah',
                 </form>
             </div>
         <?php endforeach; ?>
-        </div>
-    <?php endif; ?>
-</div>
-
-<?php if ($ditolak): ?>
-<div class="card">
-    <div class="card-kepala"><h2>Pendaftar Ditolak</h2></div>
-    <div class="geser"><table class="tbl tbl-padat">
-        <thead><tr><th>Madrasah</th><th>Akun Kepala</th><th>Alasan Penolakan</th><th>Aksi</th></tr></thead>
-        <tbody>
-        <?php foreach ($ditolak as $d): $did2 = (int)$d['id']; $ak = daftar_akun_kepala($did2); ?>
-            <tr>
-                <td><b><?= e($d['nama']) ?></b>
-                    <div class="kecil mut"><?= e($d['kecamatan'] ?: '-') ?></div></td>
-                <td><?= e($ak['username'] ?? '-') ?></td>
-                <td class="kecil"><?= e($d['daftar_alasan'] ?: '-') ?></td>
-                <td class="nowrap">
-                    <form method="post" action="sekolah.php" style="display:inline">
-                        <?= csrf_field() ?><input type="hidden" name="aksi" value="setujui">
-                        <input type="hidden" name="id" value="<?= $did2 ?>">
-                        <button class="btn btn-kecil btn-ok" type="submit"
-                            data-confirm="Setujui ulang pendaftaran <?= e($d['nama']) ?>?">Setujui &amp; Aktifkan</button>
-                    </form>
-                    <a class="btn btn-kecil btn-ghost" href="sekolah.php?edit=<?= $did2 ?>">Ubah</a>
-                </td>
-            </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table></div>
+    </div>
 </div>
 <?php endif; ?>
 
@@ -413,10 +411,10 @@ page_top('Persetujuan Madrasah',
             <a class="btn btn-kecil btn-ghost" href="pengawas.php"><?= ikon('pengawas', 15) ?> Akun Penilai</a>
         </div>
     </div>
-    <p class="ket">Madrasah <b>tidak lagi ditambahkan manual</b> di sini. Pendaftar mengisi sendiri identitas
-        lembaga + akun kepala madrasah pada <a href="daftar.php" target="_blank" rel="noopener">halaman
-        Pendaftaran Madrasah</a>, lalu Super Admin menyetujui/mengaktifkan pada bagian
-        <b>Pendaftar Menunggu Persetujuan</b> di atas.</p>
+    <p class="ket">Madrasah <b>tidak lagi ditambahkan manual</b> di sini dan pendaftaran mandiri madrasah
+        sudah dihapus. Lembaga aktif, akun kepala madrasah, dan pengawas ditarik dari aplikasi Supervisi
+        pada menu <a href="tarik_supervisi.php">Tarik dari Supervisi</a>. Data di bawah dapat diubah,
+        dinonaktifkan, atau dibuka konteksnya.</p>
     <div class="geser"><table class="tbl">
         <thead><tr><th>No</th><th>Madrasah</th><th>Kepala Madrasah</th><th class="tengah">Penilai 1 &amp; 2</th>
             <th class="tengah">Progres</th><th class="tengah">Status</th><th>Aksi</th></tr></thead>
@@ -475,6 +473,33 @@ page_top('Persetujuan Madrasah',
         <?php endforeach; ?>
         </tbody>
     </table></div>
+</div>
+
+<?php /* ---------- HAPUS SEMUA MADRASAH (v1.12.0, permintaan pemilik) ---------- */ ?>
+<div class="card" id="cardHapusSemua">
+    <div class="card-kepala"><h2>Hapus Semua Madrasah</h2>
+        <span class="pil pil-kurang">tindakan permanen</span>
+    </div>
+    <p class="ket">Menghapus <b>seluruh madrasah/sekolah</b> beserta data penilaiannya, sekaligus
+        menghapus <b>semua akun pengawas dan kepala madrasah</b>. Akun <b>Super Admin tidak dihapus</b>.
+        Data yang sudah dihapus tidak dapat dikembalikan. Untuk mengisi kembali, tarik lembaga aktif
+        dari aplikasi Supervisi pada menu <b>Tarik dari Supervisi</b>.</p>
+    <p class="kecil mut">Saat ini: <b><?= (int)val('SELECT COUNT(*) FROM sekolah') ?></b> madrasah &middot;
+        <b><?= (int)val("SELECT COUNT(*) FROM users WHERE role = 'admin'") ?></b> akun kepala madrasah &middot;
+        <b><?= (int)val("SELECT COUNT(*) FROM users WHERE role = 'pengawas'") ?></b> akun pengawas &middot;
+        <b><?= (int)val('SELECT COUNT(*) FROM penilaian') ?></b> penilaian.</p>
+    <form method="post" action="sekolah.php" class="form-hapus-semua">
+        <?= csrf_field() ?>
+        <input type="hidden" name="aksi" value="hapus_semua">
+        <label for="konfirmasiSemua">Ketik <b>HAPUS SEMUA</b> untuk menyetujui</label>
+        <div class="form-hapus-baris">
+            <input type="text" id="konfirmasiSemua" name="konfirmasi" placeholder="HAPUS SEMUA"
+                   autocomplete="off" required>
+            <button class="btn btn-err" type="submit"
+                data-confirm="Hapus SEMUA madrasah beserta seluruh akun pengawas &amp; kepala madrasah? Tindakan ini permanen.">
+                Hapus Semua Madrasah</button>
+        </div>
+    </form>
 </div>
 <?php
 page_bottom();

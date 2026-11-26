@@ -100,6 +100,12 @@ if (!function_exists('mulai_sesi')) {
         if (session_status() === PHP_SESSION_ACTIVE) {
             return;
         }
+        // v1.14.0: `gambar.php` (penerus gambar halaman depan) sengaja TANPA sesi — belasan
+        // permintaan gambar tidak boleh saling mengunci berkas sesi, dan balasan gambar tidak
+        // boleh memasang cookie. Lihat inc/gambar.php + gambar.php.
+        if (defined('PKKM_TANPA_SESI') && PKKM_TANPA_SESI) {
+            return;
+        }
         if (!is_dir(SESI_DIR)) {
             @mkdir(SESI_DIR, 0777, true);
         }
@@ -245,6 +251,9 @@ if (!function_exists('require_login')) {
         if (!$u) {
             redirect('login.php');
         }
+        // v1.15.0 (Log Aktivitas): perbarui "terakhir aktif" sesi ini supaya daftar pengguna online
+        // di halaman Log Aktivitas (Super Admin) tetap benar. Ditulis paling sering 1×/60 detik.
+        log_sesi_ping();
         return $u;
     }
 }
@@ -756,5 +765,48 @@ if (!function_exists('media_upload')) {
             return ['ok' => false, 'pesan' => $pesan];
         }
         return ['ok' => true, 'url' => (string)$data['url'], 'pesan' => ''];
+    }
+}
+
+if (!function_exists('pkkm_hapus_lembaga_semua')) {
+    /**
+     * HAPUS SEMUA MADRASAH (v1.12.0 — permintaan pemilik: "Super admin bisa menghapus semua
+     * madrasah/sekolah").
+     *
+     * Menghapus SELURUH madrasah beserta data yang bergantung padanya (penilaian, butir skor,
+     * dokumen butir, komentar, identitas penilai, penugasan penilai) dan — bila $denganAkun —
+     * seluruh akun pengawas & kepala madrasah. Akun **Super Admin tidak pernah dihapus**.
+     *
+     * @return array<string,int> jumlah baris yang dihapus per jenis (dihitung SEBELUM menghapus)
+     */
+    function pkkm_hapus_lembaga_semua(bool $denganAkun = true): array
+    {
+        $hasil = [
+            'sekolah' => (int)(val('SELECT COUNT(*) FROM sekolah') ?? 0),
+            'akun' => $denganAkun ? (int)(val("SELECT COUNT(*) FROM users WHERE role <> 'super'") ?? 0) : 0,
+            'penilaian' => (int)(val('SELECT COUNT(*) FROM penilaian') ?? 0),
+            'penilai' => (int)(val('SELECT COUNT(*) FROM penilai') ?? 0),
+            'penugasan' => (int)(val('SELECT COUNT(*) FROM pengawas_sekolah') ?? 0),
+        ];
+        mulai_transaksi();
+        try {
+            q('DELETE FROM penilaian_butir');
+            q('DELETE FROM butir_komentar');
+            q('DELETE FROM dokumen_butir');
+            q('DELETE FROM penilaian');
+            q('DELETE FROM penilai');
+            q('DELETE FROM pengawas_sekolah');
+            if ($denganAkun) {
+                q("DELETE FROM users WHERE role <> 'super'");
+            } else {
+                q("UPDATE users SET sekolah_id = NULL WHERE role <> 'super'");
+            }
+            q('DELETE FROM sekolah');
+            selesai_transaksi(true);
+        } catch (Throwable $t) {
+            selesai_transaksi(false);
+            throw $t;
+        }
+        return $hasil;
     }
 }

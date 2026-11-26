@@ -48,7 +48,7 @@ if (!function_exists('dok_jenis')) {
 }
 
 if (!function_exists('dok_maks_berkas')) {
-    /** Batas ukuran satu berkas menurut jenisnya (gambar 15 MB, dokumen 50 MB). */
+    /** Batas ukuran satu berkas: 2 MB untuk semua jenis (v1.19.0, permintaan pemilik). */
     function dok_maks_berkas(string $nama): int
     {
         return dok_jenis($nama) === 'gambar' ? DOK_MAKS_GAMBAR : DOK_MAKS_DOKUMEN;
@@ -58,7 +58,7 @@ if (!function_exists('dok_maks_berkas')) {
 if (!function_exists('dok_batas_server')) {
     /**
      * Batas ukuran yang benar-benar diterima SERVER ini (bukan hanya batas platform) untuk satu
-     * berkas. $nama berkas dipakai memilih batas jenisnya (gambar 15 MB / dokumen 50 MB).
+     * berkas. $nama berkas dipakai memilih batas jenisnya (sejak v1.19.0 keduanya 2 MB).
      * Dipakai untuk memberi tahu angka yang jujur pada formulir - bukan menebak.
      */
     function dok_batas_server(string $nama = ''): int
@@ -167,6 +167,74 @@ if (!function_exists('dok_label_berkas')) {
 }
 
 // ---------------------------------------------------------------------------------------------
+// TAUTAN GOOGLE DRIVE (v1.19.0 - permintaan pemilik)
+//   "sediakan fitur untuk memasukkan link google drive jika dokumennya sudah ada di google drive".
+//   Dokumen kepala madrasah boleh berupa BERKAS unggahan ATAU TAUTAN Google Drive; keduanya
+//   tampil pada lembar penilaian Pengawas I/II. Untuk tautan: `url` = tautannya, `ukuran` = 0,
+//   `tautan` = 1 (kolom baru skema v12).
+// ---------------------------------------------------------------------------------------------
+
+if (!function_exists('dok_tautan_validasi')) {
+    /**
+     * Periksa & rapikan tautan dokumen Google Drive.
+     * Menerima "drive.google.com/file/d/…", "docs.google.com/…", tautan tanpa "https://", dsb.
+     *
+     * @return array{ok:bool, pesan:string, url:string}
+     */
+    function dok_tautan_validasi(string $tautan): array
+    {
+        $tautan = preg_replace('/\s+/u', '', trim($tautan)) ?? '';
+        $tautan = trim($tautan, '<>"\'');
+        if ($tautan === '') {
+            return ['ok' => false, 'pesan' => 'Tautan Google Drive belum diisi.', 'url' => ''];
+        }
+        if (strlen($tautan) > DOK_TAUTAN_MAKS) {
+            return ['ok' => false, 'pesan' => 'Tautan terlalu panjang (maksimal ' . DOK_TAUTAN_MAKS
+                . ' karakter).', 'url' => ''];
+        }
+        if (preg_match('#^([a-z][a-z0-9+.\-]*):#i', $tautan, $m)) {
+            if (!in_array(strtolower($m[1]), ['http', 'https'], true)) {
+                return ['ok' => false, 'pesan' => 'Tautan harus diawali http:// atau https://.', 'url' => ''];
+            }
+        } else {
+            // pengguna sering menempel tautan tanpa "https://"
+            $tautan = 'https://' . $tautan;
+        }
+        $p = parse_url($tautan);
+        $host = strtolower((string)($p['host'] ?? ''));
+        if ($host === '' || empty($p['path']) && empty($p['query'])) {
+            return ['ok' => false, 'pesan' => 'Tautan tidak sah. Salin ulang tautan dari Google Drive.', 'url' => ''];
+        }
+        if (!preg_match('/(^|\.)(google\.com|googleusercontent\.com)$/', $host)) {
+            return ['ok' => false, 'pesan' => 'Tautan harus tautan Google Drive '
+                . '(mis. https://drive.google.com/file/d/… atau https://docs.google.com/…).', 'url' => ''];
+        }
+        return ['ok' => true, 'pesan' => '', 'url' => $tautan];
+    }
+}
+
+if (!function_exists('dokumen_adalah_tautan')) {
+    /** Apakah satu baris `dokumen_butir` berupa TAUTAN (bukan berkas unggahan)? */
+    function dokumen_adalah_tautan(array $d): bool
+    {
+        return (int)($d['tautan'] ?? 0) === 1;
+    }
+}
+
+if (!function_exists('dok_tautan_ringkas')) {
+    /** Tampilan pendek sebuah tautan untuk judul/atribut (host + potongan path). */
+    function dok_tautan_ringkas(string $url, int $maks = 46): string
+    {
+        $p = parse_url($url);
+        $teks = (string)($p['host'] ?? '') . (string)($p['path'] ?? '');
+        if (!empty($p['query'])) {
+            $teks .= '?' . $p['query'];
+        }
+        return potong_teks($teks !== '' ? $teks : $url, $maks);
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // DATA DOKUMEN
 // ---------------------------------------------------------------------------------------------
 
@@ -252,7 +320,7 @@ if (!function_exists('dokumen_simpan')) {
      * @return array{ok:bool, pesan:string}
      */
     function dokumen_simpan(int $sekolahId, int $tahun, string $butir, string $url, string $namaBerkas,
-                            int $ukuran, string $pengunggah, ?int $pengunggahId): array
+                            int $ukuran, string $pengunggah, ?int $pengunggahId, int $tautan = 0): array
     {
         if ($sekolahId <= 0 || !array_key_exists($tahun, PKKM_TAHUN_LIST) || trim($butir) === '' || $url === '') {
             return ['ok' => false, 'pesan' => 'Data dokumen tidak lengkap.'];
@@ -261,13 +329,48 @@ if (!function_exists('dokumen_simpan')) {
             [$sekolahId, $tahun, $butir]);
         if ($jml >= DOK_MAKS_PER_BUTIR) {
             return ['ok' => false, 'pesan' => 'Butir ini sudah punya ' . DOK_MAKS_PER_BUTIR
-                . ' dokumen (batas maksimal). Hapus salah satu bila ingin mengunggah yang baru.'];
+                . ' dokumen (batas maksimal). Hapus salah satu bila ingin menambah yang baru.'];
         }
-        q('INSERT INTO dokumen_butir (sekolah_id, tahun, butir, url, nama_berkas, ukuran, pengunggah, pengunggah_id, dibuat)
-           VALUES (?,?,?,?,?,?,?,?,?)',
+        q('INSERT INTO dokumen_butir (sekolah_id, tahun, butir, url, nama_berkas, ukuran, pengunggah, pengunggah_id, dibuat, tautan)
+           VALUES (?,?,?,?,?,?,?,?,?,?)',
             [$sekolahId, $tahun, $butir, $url, potong_teks($namaBerkas, DOK_NAMA_MAKS), $ukuran,
-                $pengunggah !== '' ? $pengunggah : null, $pengunggahId, date('Y-m-d H:i:s')]);
+                $pengunggah !== '' ? $pengunggah : null, $pengunggahId, date('Y-m-d H:i:s'), $tautan ? 1 : 0]);
         return ['ok' => true, 'pesan' => ''];
+    }
+}
+
+if (!function_exists('dokumen_simpan_tautan')) {
+    /**
+     * Simpan TAUTAN Google Drive sebagai dokumen butir (v1.19.0). Tautannya diperiksa lebih dulu;
+     * batas 5 dokumen per butir berlaku sama seperti berkas unggahan.
+     * @return array{ok:bool, pesan:string}
+     */
+    function dokumen_simpan_tautan(int $sekolahId, int $tahun, string $butir, string $tautan,
+                                   string $judul, string $pengunggah, ?int $pengunggahId): array
+    {
+        $cek = dok_tautan_validasi($tautan);
+        if (empty($cek['ok'])) {
+            return ['ok' => false, 'pesan' => (string)$cek['pesan']];
+        }
+        // tautan ganda pada butir yang sama tidak perlu disimpan dua kali
+        $ada = one('SELECT id FROM dokumen_butir WHERE sekolah_id = ? AND tahun = ? AND butir = ? AND url = ?',
+            [$sekolahId, $tahun, $butir, (string)$cek['url']]);
+        if ($ada) {
+            return ['ok' => false, 'pesan' => 'Tautan itu sudah tersimpan pada butir ' . $butir . '.'];
+        }
+        $judul = dok_judul_tautan_bersih($judul);
+        return dokumen_simpan($sekolahId, $tahun, $butir, (string)$cek['url'], $judul, 0,
+            $pengunggah, $pengunggahId, 1);
+    }
+}
+
+if (!function_exists('dok_judul_tautan_bersih')) {
+    /** Judul tautan: isian kepala madrasah, atau nama bawaan bila dikosongkan. */
+    function dok_judul_tautan_bersih(string $judul): string
+    {
+        $judul = trim(preg_replace('/\s+/u', ' ', $judul) ?? '');
+        $judul = potong_teks($judul, DOK_TAUTAN_NAMA_MAKS);
+        return $judul !== '' ? $judul : DOK_TAUTAN_NAMA;
     }
 }
 

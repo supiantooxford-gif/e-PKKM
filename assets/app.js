@@ -519,6 +519,137 @@
         }
     }
 
+    // ---- tampil/sembunyikan kata sandi (panel masuk halaman depan) ----
+    function initSandiMata() {
+        document.querySelectorAll('[data-sandi]').forEach(function (t) {
+            var medan = t.closest('.dp-medan') || t.parentNode;
+            var inp = medan ? medan.querySelector('input') : null;
+            if (!inp) { return; }
+            t.addEventListener('click', function () {
+                var tampil = inp.type === 'password';
+                inp.type = tampil ? 'text' : 'password';
+                t.setAttribute('aria-pressed', tampil ? 'true' : 'false');
+                t.setAttribute('aria-label', tampil ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi');
+                var buka = t.querySelector('.dp-mata-buka');
+                var tutup = t.querySelector('.dp-mata-tutup');
+                if (buka) { buka.hidden = tampil; }
+                if (tutup) { tutup.hidden = !tampil; }
+            });
+        });
+    }
+
+    // ---- halaman Tarik dari Supervisi: centang semua lembaga ----
+    function initTarikPilih() {
+        var semua = document.querySelector('[data-tarik-semua]');
+        if (!semua) { return; }
+        function kotak() { return document.querySelectorAll('input[name="lembaga[]"]'); }
+        semua.addEventListener('change', function () {
+            kotak().forEach(function (k) { k.checked = semua.checked; });
+            semua.indeterminate = false;
+        });
+        kotak().forEach(function (k) {
+            k.addEventListener('change', function () {
+                var n = 0, c = 0;
+                kotak().forEach(function (x) { c++; if (x.checked) { n++; } });
+                semua.checked = n > 0 && n === c;
+                semua.indeterminate = n > 0 && n < c;
+            });
+        });
+    }
+
+    // ---- GAMBAR HALAMAN DEPAN DILINDUNGI (v1.14.0, permintaan pemilik) ----
+    // Menutup klik kanan ("Simpan gambar sebagai…" / "Buka gambar di tab baru") dan seret-lepas
+    // pada gambar halaman depan. Alamat sumbernya sendiri tidak pernah ada di HTML: gambar
+    // dialirkan lewat gambar.php (lihat inc/gambar.php).
+    function initLindungGambar() {
+        var gambar = document.querySelectorAll('img[data-lindung]');
+        if (gambar.length) {
+            for (var i = 0; i < gambar.length; i++) {
+                gambar[i].setAttribute('draggable', 'false');
+                gambar[i].addEventListener('dragstart', function (e) { e.preventDefault(); });
+            }
+        }
+        function terlindung(t) {
+            if (!t || !t.closest) { return false; }
+            return !!(t.closest('[data-lindung-wadah]') || t.closest('img[data-lindung]'));
+        }
+        document.addEventListener('contextmenu', function (e) {
+            if (!terlindung(e.target)) { return; }
+            e.preventDefault();
+            return false;
+        });
+        document.addEventListener('dragstart', function (e) {
+            if (terlindung(e.target)) { e.preventDefault(); }
+        });
+    }
+
+    // ---- SLIDER GAMBAR halaman depan (v1.13.0, diisi Super Admin) ----
+    function initDepanSlider() {
+        document.querySelectorAll('[data-slider]').forEach(function (akar) {
+            var slide = akar.querySelectorAll('[data-slide]');
+            var titik = akar.querySelectorAll('[data-slide-titik]');
+            if (!slide.length) { return; }
+
+            // v1.13.2 (permintaan pemilik): kotak slider mengikuti RASIO GAMBAR yang diunggah,
+            // supaya gambar tampil utuh (tidak terpotong atas/bawah seperti tinggi tetap dulu).
+            // Dipakai rasio gambar PERTAMA agar tinggi kotak tidak melompat saat gambar berganti.
+            function pasangRasio(gambar) {
+                if (!gambar || !gambar.naturalWidth || !gambar.naturalHeight) { return; }
+                var rasio = gambar.naturalWidth / gambar.naturalHeight;
+                if (!isFinite(rasio) || rasio < 0.6 || rasio > 3.2) { return; }  // batas aman
+                akar.style.setProperty('--dp-rasio', String(rasio));
+            }
+            var pertama = slide[0].querySelector('img');
+            if (pertama) {
+                if (pertama.complete) { pasangRasio(pertama); }
+                pertama.addEventListener('load', function () { pasangRasio(pertama); });
+            }
+
+            if (slide.length < 2) { return; }
+            var kini = 0;
+            var jeda = parseInt(akar.getAttribute('data-otomatis') || '0', 10);
+            var timer = null;
+
+            function tampil(i) {
+                if (i < 0) { i = slide.length - 1; }
+                if (i >= slide.length) { i = 0; }
+                kini = i;
+                slide.forEach(function (el, n) { el.classList.toggle('on', n === i); });
+                titik.forEach(function (el, n) {
+                    el.classList.toggle('on', n === i);
+                    el.setAttribute('aria-selected', n === i ? 'true' : 'false');
+                });
+            }
+            function mulai() {
+                if (jeda < 1500) { return; }
+                henti();
+                timer = setInterval(function () { tampil(kini + 1); }, jeda);
+            }
+            function henti() {
+                if (timer) { clearInterval(timer); timer = null; }
+            }
+
+            akar.querySelectorAll('[data-slide-panah]').forEach(function (tombol) {
+                tombol.addEventListener('click', function () {
+                    tampil(kini + (parseInt(tombol.getAttribute('data-slide-panah'), 10) || 1));
+                    mulai();   // ulangi hitungan setelah pengunjung menekan panah
+                });
+            });
+            titik.forEach(function (el, n) {
+                el.addEventListener('click', function () { tampil(n); mulai(); });
+            });
+            akar.addEventListener('mouseenter', henti);
+            akar.addEventListener('mouseleave', mulai);
+            akar.addEventListener('focusin', henti);
+            akar.addEventListener('focusout', mulai);
+           document.addEventListener('visibilitychange', function () {
+                if (document.hidden) { henti(); } else { mulai(); }
+            });
+            tampil(0);
+            mulai();
+        });
+    }
+
     // ---- tandai baris tabel yang bisa diklik ----
     document.addEventListener('DOMContentLoaded', function () {
         initMenu();
@@ -530,5 +661,9 @@
         initDaftar();
         initPilihPenilai();
         initGrafikPKKM();
+        initSandiMata();
+        initTarikPilih();
+        initDepanSlider();
+        initLindungGambar();
     });
 })();

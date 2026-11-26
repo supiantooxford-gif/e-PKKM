@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $hasil = dokumen_unggah_berkas($sid, $tahun, $butir, 'berkas');
         if ($hasil['ok'] > 0) {
             flash($hasil['ok'] . ' dokumen tersimpan untuk butir ' . $butir . ' ('
-                . pilihan_tahun($tahun) . '). Dokumen ini dapat dilihat dan dikomentari Pengawas I &amp; II.');
+                . pilihan_tahun($tahun) . '). Dokumen ini dapat dilihat dan dikomentari Pengawas I dan Pengawas II.');
         }
         foreach ($hasil['gagal'] as $pesan) {
             flash($pesan, 'err');
@@ -60,6 +60,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($hasil['ok'] === 0 && !$hasil['gagal']) {
             flash('Tidak ada berkas yang diunggah.', 'err');
         }
+        redirect('dokumen.php?tahun=' . $tahun . '#butir-' . str_replace('.', '-', $butir));
+    }
+
+    if ($aksi === 'tautan') {
+        // v1.19.0 - TAUTAN GOOGLE DRIVE (permintaan pemilik): dokumen yang sudah ada di Drive
+        // tidak perlu diunggah ulang, cukup ditempel tautannya.
+        $butir = trim((string)($_POST['butir'] ?? ''));
+        $daftar = butir_tahun($tahun);
+        if (!isset($daftar[$butir])) {
+            flash('Butir penilaian tidak dikenal pada tahun tersebut.', 'err');
+            redirect('dokumen.php?tahun=' . $tahun);
+        }
+        $simpan = dokumen_simpan_tautan($sid, $tahun, $butir, (string)($_POST['tautan'] ?? ''),
+            (string)($_POST['judul_tautan'] ?? ''), (string)$u['nama'], (int)$u['id']);
+        flash($simpan['ok']
+            ? 'Tautan Google Drive tersimpan untuk butir ' . $butir . ' (' . pilihan_tahun($tahun)
+                . '). Penilai Pengawas I dan Pengawas II dapat membukanya dari lembar penilaian.'
+            : (string)$simpan['pesan'], $simpan['ok'] ? 'ok' : 'err');
         redirect('dokumen.php?tahun=' . $tahun . '#butir-' . str_replace('.', '-', $butir));
     }
 
@@ -80,7 +98,6 @@ $perTahun = PKKM_TAHUN_LIST[$tahun];
 $totalButir = count(butir_tahun($tahun));
 $butirTerisi = dokumen_butir_terisi($sid, $tahun);
 $persen = $totalButir > 0 ? (int)round($butirTerisi / $totalButir * 100) : 0;
-$batasGambar = dok_batas_server('jpg');
 $batasDokumen = dok_batas_server('pdf');
 
 page_top('Unggah Dokumen Butir Penilaian',
@@ -90,29 +107,30 @@ page_top('Unggah Dokumen Butir Penilaian',
     <div class="baris-info">
         <div><span>Madrasah:</span> <b><?= e($s['nama']) ?></b></div>
         <div><span>Kepala Madrasah:</span> <b><?= e($s['kepala_nama'] ?: '-') ?></b></div>
-        <div><span>Total dokumen:</span> <b><?= dokumen_jumlah($sid) ?> berkas</b></div>
+        <div><span>Total dokumen:</span> <b><?= dokumen_jumlah($sid) ?> dokumen</b></div>
         <div><span>Butir terisi (<?= e($perTahun) ?>):</span> <b><?= $butirTerisi ?> dari <?= $totalButir ?> butir</b></div>
     </div>
-    <p class="ket mt8 mb0">Unggah dokumen bukti (PDF, DOCX, XLSX, PPTX, CSV, TXT, ZIP, atau gambar) untuk setiap butir
-        penilaian. Dokumen yang tersimpan otomatis masuk ke tim penilai &mdash; <b>Pengawas I</b> dan
-        <b>Pengawas II</b> dapat melihat dokumennya, memberi <b>komentar</b>, dan memberi <b>skor nilai</b>
-        pada menu <b>Penilaian Kepala Madrasah</b>. Pilih tahun penilaian di bawah: dokumen tiap tahun
-        disimpan terpisah.</p>
+    <p class="ket mt8 mb0">Unggah dokumen bukti (PDF, DOCX, XLSX, PPTX, CSV, TXT, ZIP, atau gambar, <b>maksimal
+        <?= e(dok_ukuran_teks($batasDokumen)) ?> per berkas</b>) untuk setiap butir penilaian &mdash; atau, bila
+        dokumennya <b>sudah ada di Google Drive</b>, cukup tempel <b>tautan Google Drive</b>-nya pada kolom
+        <b>Tautan Google Drive</b> di bawah. Dokumen yang tersimpan (berkas maupun tautan) otomatis masuk ke tim
+        penilai &mdash; <b>Pengawas I</b> dan <b>Pengawas II</b> dapat melihat/membukanya, memberi
+        <b>komentar</b>, dan memberi <b>skor nilai</b> pada menu <b>Penilaian Kepala Madrasah</b>. Pilih tahun
+        penilaian di bawah: dokumen tiap tahun disimpan terpisah.</p>
 </div>
 
 <div class="card">
     <div class="card-kepala"><h2>Pilih Tahun Penilaian</h2>
         <div class="aksi">
-            <span class="kecil mut">Maks <?= (int)DOK_MAKS_PER_BUTIR ?> berkas per butir &middot;
-                maks <?= e(dok_ukuran_teks($batasGambar)) ?> (gambar) /
-                <?= e(dok_ukuran_teks($batasDokumen)) ?> (dokumen) per berkas</span>
+            <span class="kecil mut">Maks <?= (int)DOK_MAKS_PER_BUTIR ?> dokumen per butir (berkas + tautan) &middot;
+                maks <?= e(dok_ukuran_teks($batasDokumen)) ?> per berkas</span>
         </div>
     </div>
     <div class="chip-tahun">
         <?php foreach (PKKM_TAHUN_LIST as $no => $label): ?>
             <a class="chip-tahun-item<?= $no === $tahun ? ' on' : '' ?>" href="dokumen.php?tahun=<?= (int)$no ?>">
                 <b><?= e($label) ?></b>
-                <span><?= (int)($jumlahTahun[$no] ?? 0) ?> berkas</span>
+                <span><?= (int)($jumlahTahun[$no] ?? 0) ?> dokumen</span>
             </a>
         <?php endforeach; ?>
     </div>
@@ -153,12 +171,15 @@ page_top('Unggah Dokumen Butir Penilaian',
                     <td class="dok-sel">
                         <?php if ($berkas): ?>
                             <ul class="dok-daftar">
-                                <?php foreach ($berkas as $d): ?>
+                                <?php foreach ($berkas as $d): $tautanD = dokumen_adalah_tautan($d); ?>
                                     <li>
-                                        <span class="dok-pil"><?= e(dok_label_berkas((string)$d['nama_berkas'])) ?></span>
+                                        <span class="dok-pil<?= $tautanD ? ' dok-pil-drive' : '' ?>"><?= $tautanD
+                                            ? 'DRIVE' : e(dok_label_berkas((string)$d['nama_berkas'])) ?></span>
                                         <a href="<?= e($d['url']) ?>" target="_blank" rel="noopener noreferrer"
-                                           title="<?= e($d['nama_berkas']) ?>"><?= e(potong_teks((string)$d['nama_berkas'], 34)) ?></a>
-                                        <span class="kecil mut"><?= e(dok_ukuran_teks((int)$d['ukuran'])) ?></span>
+                                           title="<?= e($tautanD ? $d['url'] : $d['nama_berkas']) ?>"><?= e(potong_teks((string)$d['nama_berkas'], 34)) ?></a>
+                                        <span class="kecil mut"><?= $tautanD
+                                            ? e(dok_tautan_ringkas((string)$d['url'], 28))
+                                            : e(dok_ukuran_teks((int)$d['ukuran'])) ?></span>
                                         <?php if ($bolehUnggah): ?>
                                             <form method="post" action="dokumen.php?tahun=<?= (int)$tahun ?>" class="dok-hapus">
                                                 <?= csrf_field() ?>
@@ -199,9 +220,26 @@ page_top('Unggah Dokumen Butir Penilaian',
                                        aria-label="Berkas dokumen butir <?= e($kodeButir) ?>">
                                 <button class="btn btn-kecil" type="submit"><?= ikon('unggah', 14) ?> Unggah</button>
                             </form>
-                            <p class="kecil mut mb0"><?= count($berkas) ?>/<?= (int)DOK_MAKS_PER_BUTIR ?> berkas
-                                &middot; maks <?= e(dok_ukuran_teks($batasGambar)) ?> gambar /
-                                <?= e(dok_ukuran_teks($batasDokumen)) ?> dokumen</p>
+                            <p class="kecil mut mb0"><?= count($berkas) ?>/<?= (int)DOK_MAKS_PER_BUTIR ?> dokumen
+                                &middot; maks <?= e(dok_ukuran_teks($batasDokumen)) ?> per berkas</p>
+                            <?php // v1.19.0 - TAUTAN GOOGLE DRIVE (permintaan pemilik) ?>
+                            <form class="dok-tautan" method="post" action="dokumen.php?tahun=<?= (int)$tahun ?>">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="aksi" value="tautan">
+                                <input type="hidden" name="tahun" value="<?= (int)$tahun ?>">
+                                <input type="hidden" name="butir" value="<?= e($kodeButir) ?>">
+                                <label class="dok-tautan-label" for="tautan-<?= e(str_replace('.', '-', $kodeButir)) ?>">
+                                    Tautan Google Drive</label>
+                                <input type="url" name="tautan" id="tautan-<?= e(str_replace('.', '-', $kodeButir)) ?>"
+                                       inputmode="url" autocomplete="off" maxlength="<?= (int)DOK_TAUTAN_MAKS ?>"
+                                       placeholder="https://drive.google.com/…"
+                                       aria-label="Tautan Google Drive butir <?= e($kodeButir) ?>">
+                                <input type="text" name="judul_tautan" autocomplete="off"
+                                       maxlength="<?= (int)DOK_TAUTAN_NAMA_MAKS ?>"
+                                       placeholder="Nama dokumen (opsional)"
+                                       aria-label="Nama dokumen tautan butir <?= e($kodeButir) ?>">
+                                <button class="btn btn-kecil btn-ghost" type="submit">Simpan Tautan</button>
+                            </form>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -209,7 +247,7 @@ page_top('Unggah Dokumen Butir Penilaian',
             </tbody>
             <tfoot><tr><td colspan="4">Jumlah dokumen <?= e($bk) ?>. <?= e($bagian['judul']) ?></td>
                 <td class="tengah"><?= (int)array_sum(array_map(
-                    fn($k) => count($dokumen[$k] ?? []), $bagian['butir'])) ?> berkas</td></tr></tfoot>
+                    fn($k) => count($dokumen[$k] ?? []), $bagian['butir'])) ?> dokumen</td></tr></tfoot>
         </table></div>
     </div>
 <?php endforeach; ?>

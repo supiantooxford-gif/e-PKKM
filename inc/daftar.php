@@ -2,7 +2,14 @@
 /**
  * e-PKKM - PENDAFTARAN MADRASAH (permintaan pemilik).
  *
- * Madrasah mendaftar SENDIRI lewat halaman publik `daftar.php` dengan mengisi identitas lembaga
+ * ⚠️ Sejak v1.11.0 halaman pendaftaran madrasah (`daftar.php`) DIHAPUS (permintaan pemilik):
+ * lembaga, kepala madrasah, dan pengawas ditarik Super Admin dari aplikasi Supervisi
+ * (`inc/supervisi.php` + `tarik_supervisi.php`). Fungsi di berkas ini yang masih dipakai adalah
+ * status/persetujuan sisa data lama (`daftar_status_sekolah`, `daftar_pesan_masuk`,
+ * `daftar_pendaftar_list`, `daftar_setujui`, `daftar_tolak`, `daftar_akun_kepala`,
+ * `daftar_username_sah`). Fungsi pendaftaran (`daftar_simpan`) tidak lagi dipanggil halaman.
+ *
+ * Catatan lama: Madrasah mendaftar SENDIRI lewat halaman publik `daftar.php` dengan mengisi identitas lembaga
  * + akun kepala madrasah. Pendaftaran berstatus **menunggu** dan **belum dapat dipakai masuk**
  * sampai Super Admin menyetujui/mengaktifkannya di halaman `sekolah.php`.
  *

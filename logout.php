@@ -2,6 +2,10 @@
 /** e-PKKM - keluar dari aplikasi. */
 require_once __DIR__ . '/inc/init.php';
 mulai_sesi();
+// v1.15.0 (Log Aktivitas): catat aktivitas "keluar" + hilangkan dari daftar pengguna online.
+// "Keluar" hanya tercatat bila pengguna benar-benar menekan tombol Keluar (sesi kedaluwarsa tidak
+// dihitung keluar) — kebijakan yang sama dengan e-GURU & Supervisi Guru.
+log_sesi_selesai(current_user());
 $_SESSION = [];
 if (ini_get('session.use_cookies')) {
     $p = session_get_cookie_params();

@@ -1,365 +1,221 @@
 <?php
 /**
- * e-PKKM - HALAMAN DEPAN (LANDING PAGE) + PANEL MASUK.
+ * e-PKKM - HALAMAN DEPAN (PANEL MASUK).
  *
- * Permintaan pemilik: "Halaman depan buat landing page seperti Aplikasi Supervisi".
- * Halaman ini memuat: bilah navigasi, beranda (slider + panel masuk + empat kotak statistik),
- * fitur aplikasi, keunggulan, testimoni, tentang aplikasi, dan kontak (info + tombol WhatsApp +
- * formulir pesan). Seluruh isinya diisi Super Admin lewat menu "Halaman Depan (Landing)"
- * (berkas `landing.php`); nilai bawaannya ada di `inc/landing.php`.
+ * Permintaan pemilik (v1.11.0): "Halaman depan rubah tampilannya (tidak perlu landing page).
+ * Contoh seperti gambar." Halaman ini sekarang berupa SATU layar dua kolom seperti contoh:
+ *   - kiri  : identitas aplikasi, judul besar, empat kartu keunggulan, ilustrasi madrasah, dan
+ *             baris manfaat di bagian bawah;
+ *   - kanan : panel masuk putih (nama pengguna, kata sandi, tombol Masuk) + catatan versi.
+ * Seluruh isi LANDING PAGE (slider, fitur, keunggulan, testimoni, kontak, formulir pesan) DIHAPUS.
  *
- * Halaman ini sekaligus tempat MASUK (login) dan menerima PESAN KONTAK pengunjung.
+ * Halaman ini sekaligus tempat MASUK (login). Pendaftaran madrasah mandiri juga DIHAPUS
+ * (permintaan pemilik v1.11.0): lembaga, kepala madrasah, dan pengawas ditarik Super Admin dari
+ * aplikasi Supervisi Guru lewat menu "Tarik dari Supervisi" (`tarik_supervisi.php`). Halaman
+ * pendaftaran yang tersisa hanya `daftar_penilai.php` — khusus jabatan SELAIN pengawas.
  */
-
 require_once __DIR__ . '/inc/init.php';
-require_once __DIR__ . '/inc/landing.php';
 
 if (current_user()) {
     redirect('index.php');
 }
 
 $galat = '';
-$pesanGalat = [];
-$nilaiPesan = ['nama' => '', 'kontak' => '', 'pesan' => ''];
-
-// pengaman sederhana formulir kontak
-if (empty($_SESSION['landing_captcha'])) {
-    $_SESSION['landing_captcha'] = ['a' => random_int(2, 9), 'b' => random_int(2, 9)];
-}
-$cap = $_SESSION['landing_captcha'];
-$terkirim = isset($_GET['terkirim']);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!csrf_ok()) {
         tolak_csrf();
     }
-    $aksi = (string)($_POST['aksi'] ?? 'masuk');
-
-    // ----------------------------------------------------------------- kirim pesan kontak
-    if ($aksi === 'pesan') {
-        $nilaiPesan['nama'] = landing_potong((string)($_POST['nama'] ?? ''), LANDING_NAMA_MAKS);
-        $nilaiPesan['kontak'] = landing_potong((string)($_POST['kontak'] ?? ''), 120);
-        $nilaiPesan['pesan'] = landing_potong((string)($_POST['pesan'] ?? ''), LANDING_PESAN_MAKS);
-        $jawab = trim((string)($_POST['captcha'] ?? ''));
-
-        if ((int)($_SESSION['landing_pesan_jumlah'] ?? 0) >= LANDING_MAKS_SESI) {
-            $pesanGalat[] = 'Pengiriman pesan dari sesi ini sudah mencapai batas (' . LANDING_MAKS_SESI . ' kali).';
-        }
-        if ($nilaiPesan['nama'] === '') {
-            $pesanGalat[] = 'Nama wajib diisi.';
-        }
-        if ($nilaiPesan['kontak'] === '') {
-            $pesanGalat[] = 'Email atau nomor WhatsApp wajib diisi.';
-        }
-        if (potong_teks($nilaiPesan['pesan'], 1000) === '' || strlen($nilaiPesan['pesan']) < 5) {
-            $pesanGalat[] = 'Tuliskan pesan Anda (minimal 5 karakter).';
-        }
-        if ($jawab === '' || (int)$jawab !== ((int)$cap['a'] + (int)$cap['b'])) {
-            $pesanGalat[] = 'Jawaban pengaman (captcha) salah.';
-        }
-        if (!$pesanGalat) {
-            try {
-                q('INSERT INTO landing_pesan (nama, kontak, pesan, ip, dibaca, dibuat) VALUES (?,?,?,?,0,?)',
-                    [$nilaiPesan['nama'], $nilaiPesan['kontak'], $nilaiPesan['pesan'],
-                        permintaan_ip(), date('Y-m-d H:i:s')]);
-                $_SESSION['landing_pesan_jumlah'] = (int)($_SESSION['landing_pesan_jumlah'] ?? 0) + 1;
-                unset($_SESSION['landing_captcha']);
-                flash('Terima kasih, ' . $nilaiPesan['nama'] . '. Pesan Anda sudah terkirim dan akan dibalas Admin aplikasi.');
-                redirect('login.php?terkirim=1#kontak');
-            } catch (Throwable $t) {
-                $pesanGalat[] = 'Pesan gagal disimpan. Coba lagi sebentar lagi.';
-            }
-        }
-        $_SESSION['landing_captcha'] = ['a' => random_int(2, 9), 'b' => random_int(2, 9)];
-        $cap = $_SESSION['landing_captcha'];
+    $username = trim((string)($_POST['username'] ?? ''));
+    $sandi = (string)($_POST['password'] ?? '');
+    if ($username === '' || $sandi === '') {
+        $galat = 'Nama pengguna dan kata sandi wajib diisi.';
     } else {
-        // --------------------------------------------------------------------- masuk aplikasi
-        $username = trim((string)($_POST['username'] ?? ''));
-        $sandi = (string)($_POST['password'] ?? '');
-        if ($username === '' || $sandi === '') {
-            $galat = 'Nama pengguna dan kata sandi wajib diisi.';
+        $u = one('SELECT * FROM users WHERE username = ?', [$username]);
+        if (!$u || !password_verify($sandi, $u['sandi'])) {
+            $galat = 'Nama pengguna atau kata sandi salah.';
+            // v1.15.0 (Log Aktivitas, permintaan pemilik): percobaan masuk gagal ikut dicatat
+            // supaya percobaan mencurigakan terpantau di menu Log Aktivitas Super Admin.
+            log_gagal(null, $username, 'Nama pengguna atau kata sandi salah');
+        } elseif (!(int)$u['aktif']) {
+            $galat = 'Akun ini dinonaktifkan. Hubungi Super Admin.';
+            log_gagal($u, $username, 'Akun dinonaktifkan');
         } else {
-            $u = one('SELECT * FROM users WHERE username = ?', [$username]);
-            if (!$u || !password_verify($sandi, $u['sandi'])) {
-                $galat = 'Nama pengguna atau kata sandi salah.';
-            } elseif (!(int)$u['aktif']) {
-                $galat = 'Akun ini dinonaktifkan. Hubungi Super Admin.';
-            } else {
-                $s = null;
-                if ($u['role'] === 'admin') {
-                    $s = one('SELECT * FROM sekolah WHERE id = ?', [(int)$u['sekolah_id']]);
-                    if (!$s) {
-                        $galat = 'Akun Anda belum ditautkan ke madrasah. Hubungi Super Admin.';
-                    } elseif (daftar_status_sekolah($s) !== 'disetujui') {
-                        // pendaftar baru: belum boleh masuk sebelum disetujui/diaktifkan Admin aplikasi
-                        $galat = daftar_pesan_masuk($s);
-                    } elseif (!(int)$s['aktif']) {
-                        $galat = 'Madrasah Anda sedang dinonaktifkan. Hubungi Super Admin.';
-                    }
+            $s = null;
+            if ($u['role'] === 'admin') {
+                $s = one('SELECT * FROM sekolah WHERE id = ?', [(int)$u['sekolah_id']]);
+                if (!$s) {
+                    $galat = 'Akun Anda belum ditautkan ke madrasah. Hubungi Super Admin.';
+                    log_gagal($u, $username, 'Akun belum ditautkan ke madrasah');
+                } elseif (daftar_status_sekolah($s) !== 'disetujui') {
+                    // sisa data pendaftaran lama: belum boleh masuk sebelum disetujui Admin aplikasi
+                    $galat = daftar_pesan_masuk($s);
+                    log_gagal($u, $username, 'Madrasah belum disetujui');
+                } elseif (!(int)$s['aktif']) {
+                    $galat = 'Madrasah Anda sedang dinonaktifkan. Hubungi Super Admin.';
+                    log_gagal($u, $username, 'Madrasah dinonaktifkan');
                 }
-                if ($galat === '') {
-                    mulai_sesi();
-                    session_regenerate_id(true);
-                    $_SESSION['uid'] = (int)$u['id'];
-                    unset($_SESSION['ctx_sekolah_id']);
-                    redirect('index.php');
-                }
+            }
+            if ($galat === '') {
+                mulai_sesi();
+                session_regenerate_id(true);
+                $_SESSION['uid'] = (int)$u['id'];
+                unset($_SESSION['ctx_sekolah_id']);
+                // v1.15.0: daftarkan sebagai pengguna ONLINE + catat aktivitas "masuk".
+                log_sesi_mulai($u);
+                redirect('index.php');
             }
         }
     }
 }
 
-// ---------------------------------------------------------------- isi halaman depan
-$slides = landing_list('slider');
-$fitur = landing_list('fitur');
-$unggulan = landing_list('unggulan');
-$stats = landing_stat_list();
-$waTautan = landing_wa_tautan('Assalamualaikum, saya ingin bertanya tentang aplikasi ' . APP_NAME . '.');
 ?>
 <!doctype html>
 <html lang="id">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title><?= e(APP_NAME) ?> - <?= e(APP_SUB) ?></title>
+<title>Masuk - <?= e(APP_NAME) ?> | <?= e(APP_SUB) ?></title>
 <meta name="description" content="<?= e(APP_NAME . ' - ' . APP_SUB) ?>">
 <link rel="stylesheet" href="assets/style.css?v=<?= e(APP_VERSION) ?>">
 <link rel="icon" href="data:image/svg+xml,<?= rawurlencode('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><rect width="24" height="24" fill="#0b4a33"/><path d="M12 4l8 5v11H4V9z" fill="#c9a227"/></svg>') ?>">
 </head>
-<body class="bg-deco lp">
+<body class="dp">
 
-<!-- ============================ bilah navigasi ============================ -->
-<header class="lp-nav" id="lpNav">
-    <div class="lp-nav-inner">
-        <a class="lp-brand" href="#beranda">
-            <span class="lp-brand-ikon"><?= landing_ikon('school', 22) ?></span>
-            <span><b><?= e(APP_NAME) ?></b><i><?= e(APP_SUB) ?></i></span>
-        </a>
-        <button class="lp-nav-tombol" type="button" data-lp-menu aria-label="Buka menu"><?= ikon('menu', 20) ?></button>
-        <nav class="lp-nav-menu" id="lpMenu">
-            <a href="#beranda">Beranda</a>
-            <a href="#fitur">Fitur</a>
-            <a href="#keunggulan">Keunggulan</a>
-            <a href="daftar.php">Pendaftaran</a>
-            <a href="daftar_penilai.php">Pendaftaran Penilai</a>
-            <a href="#kontak">Kontak</a>
-            <a class="lp-nav-masuk" href="#masuk">Masuk</a>
-        </nav>
-    </div>
-</header>
+<div class="dp-layar">
 
-<!-- ================================ beranda =============================== -->
-<section class="lp-sec lp-hero" id="beranda">
-    <div class="lp-wrap">
-        <p class="lp-label lp-hero-head"><?= e(landing_teks('label')) ?></p>
+    <!-- ============================ kolom kiri: identitas ============================ -->
+    <section class="dp-kiri" id="beranda">
+        <header class="dp-merek">
+            <span class="dp-lambang" aria-hidden="true">
+                <svg viewBox="0 0 48 48" width="46" height="46" role="img">
+                    <circle cx="24" cy="24" r="23" fill="#ffffff" stroke="#0b4a33" stroke-width="2"/>
+                    <path d="M24 9l13 8v17H11V17z" fill="#0b4a33"/>
+                    <path d="M24 15c3 2 5 3 8 4v11h-5v-6h-6v6h-5V19c3-1 5-2 8-4z" fill="#c9a227"/>
+                    <circle cx="24" cy="12" r="2" fill="#c9a227"/>
+                </svg>
+            </span>
+            <span class="dp-merek-teks">
+                <b><?= e(APP_NAME) ?></b>
+                <i><?= e(APP_SUB) ?></i>
+            </span>
+        </header>
 
-        <div class="lp-hero-grid">
-            <div class="lp-hero-kiri">
+        <h1 class="dp-judul">Sistem Penilaian Kinerja<br><span>Kepala Madrasah yang Modern</span></h1>
+        <?php /* v1.13.2 (permintaan pemilik): kalimat slogan di bawah judul DIHAPUS. */ ?>
 
-                <?php if ($slides): ?>
-                    <div class="lp-slider" data-lp-slider data-otomatis="6000">
-                        <div class="lp-slider-track">
-                            <?php foreach ($slides as $i => $s):
-                                $gambar = landing_slider_gambar($s); ?>
-                                <figure class="lp-slide">
-                                    <div class="lp-slide-gambar<?= $gambar === '' ? ' lp-slide-kosong' : '' ?>">
-                                        <?php if ($gambar !== ''): ?>
-                                            <img src="<?= e($gambar) ?>" alt="<?= e($s['judul']) ?>" loading="lazy">
-                                        <?php else: ?>
-                                            <?= landing_ikon('medal', 60) ?>
-                                        <?php endif; ?>
-                                        <figcaption class="lp-slide-teks">
-                                            <?php if ($i === 0): ?>
-                                                <h1><?= e($s['judul']) ?></h1>
-                                            <?php else: ?>
-                                                <h2><?= e($s['judul']) ?></h2>
-                                            <?php endif; ?>
-                                            <p><?= nl2br(e($s['keterangan'])) ?></p>
-                                        </figcaption>
-                                    </div>
-                                </figure>
-                            <?php endforeach; ?>
-                        </div>
-                        <?php if (count($slides) > 1): ?>
-                            <div class="lp-slider-nav" hidden>
-                                <button type="button" data-lp-prev aria-label="Slide sebelumnya">&#8249;</button>
-                                <span class="lp-slider-titik" data-lp-titik></span>
-                                <button type="button" data-lp-next aria-label="Slide berikutnya">&#8250;</button>
-                            </div>
-                        <?php endif; ?>
-                    </div>
-                <?php endif; ?>
+        <div class="dp-gambar"><?= depan_slider_html() ?></div>
+
+        <div class="dp-kaki">
+            <ul class="dp-manfaat" aria-label="Manfaat aplikasi">
+                <li><span><?= ikon('dokumen', 18) ?></span><b>Terintegrasi</b><i>Data lembaga ditarik dari aplikasi Supervisi</i></li>
+                <li><span><?= ikon('clock', 18) ?></span><b>Efisien</b><i>Proses penilaian cepat menghemat waktu</i></li>
+                <li><span><?= ikon('buka', 18) ?></span><b>Akses Mudah</b><i>Dibuka kapan saja dan di mana saja</i></li>
+                <li><span><?= ikon('centang', 18) ?></span><b>Transparan</b><i>Nilai jelas bagi madrasah dan penilai</i></li>
+            </ul>
+
+            <div class="dp-lencana" aria-hidden="true">
+                <span class="dp-lencana-ikon">
+                    <svg viewBox="0 0 48 48" width="34" height="34">
+                        <path d="M24 7l14 9v20H10V16z" fill="#0b4a33"/>
+                        <path d="M16 22h16v3H16zM16 28h16v3H16z" fill="#c9a227"/>
+                    </svg>
+                </span>
+                <span class="dp-lencana-teks"><b><?= e(APP_NAME) ?></b><i><?= e(APP_SUB) ?></i></span>
+            </div>
+        </div>
+
+        <?php /* v1.13.1 (permintaan pemilik): empat kartu keunggulan dipindah ke BAWAH baris
+                 Terintegrasi / Efisien / Akses Mudah / Transparan, tepat setelah slider gambar. */ ?>
+        <ul class="dp-ciri" aria-label="Keunggulan aplikasi">
+            <li>
+                <span class="dp-ciri-ikon"><?= ikon('nilai', 24) ?></span>
+                <b>Instrumen Lengkap</b>
+                <i>109 butir penilaian<br>Tahun Pertama–Keempat</i>
+            </li>
+            <li>
+                <span class="dp-ciri-ikon"><?= ikon('guru', 24) ?></span>
+                <b>7 Penilai Tahun Keempat</b>
+                <i>Pengawas, Guru, Tendik,<br>Komite, Yayasan/Kabid</i>
+            </li>
+            <li>
+                <span class="dp-ciri-ikon"><?= ikon('rekap', 24) ?></span>
+                <b>Rekap &amp; Cetak</b>
+                <i>NKKM, rekap resmi,<br>unduh Word siap cetak</i>
+            </li>
+            <li>
+                <span class="dp-ciri-ikon"><?= ikon('kunci', 24) ?></span>
+                <b>Aman &amp; Terpercaya</b>
+                <i>Data tiap madrasah<br>terpisah dan terkunci</i>
+            </li>
+        </ul>
+    </section>
+
+    <!-- ============================ kolom kanan: panel masuk ============================ -->
+    <section class="dp-kanan">
+        <div class="dp-panel" id="masuk">
+            <?php /* v1.17.0 (permintaan pemilik): (a) tempat logo aplikasi BULAT di atas judul —
+                     logo diunggah Super Admin lewat menu Layanan → Logo Aplikasi, dan alamat aslinya
+                     TIDAK dicetak ke HTML (dialirkan gambar.php?j=logo, sama seperti gambar halaman
+                     depan); (b) judul + sub judul + kalimat "Silakan login" dibuat RATA TENGAH. */ ?>
+            <?= logo_app_tag() ?>
+            <div class="dp-panel-kepala">
+                <h2 class="dp-panel-judul"><?= e(APP_NAME) ?></h2>
+                <p class="dp-panel-sub"><?= e(APP_SUB) ?></p>
+                <p class="dp-panel-ket">Silakan login menggunakan akun Anda</p>
             </div>
 
-            <!-- ------------------------ PANEL MASUK ------------------------ -->
-            <div class="lp-hero-kanan">
-                <div class="card lp-login" id="masuk">
-                    <h2>Masuk Aplikasi</h2>
-                    <p class="ket">Khusus Super Admin, kepala madrasah, dan penilai (pengawas, Kabag,
-                        Kasie, Guru, Komite).</p>
-                    <?php if ($galat !== ''): ?>
-                        <div class="alert alert-err"><?= e($galat) ?></div>
-                    <?php endif; ?>
-                    <form method="post" action="login.php#masuk">
-                        <?= csrf_field() ?>
-                        <input type="hidden" name="aksi" value="masuk">
-                        <div class="form-baris">
-                            <label for="username">Nama Pengguna</label>
-                            <input type="text" id="username" name="username" required
-                                   value="<?= e($_POST['username'] ?? '') ?>">
-                        </div>
-                        <div class="form-baris">
-                            <label for="password">Kata Sandi</label>
-                            <input type="password" id="password" name="password" required>
-                        </div>
-                        <button class="btn btn-lebar" type="submit">Masuk</button>
-                    </form>
-                    <!-- FITUR PENDAFTARAN: MADRASAH + PENILAI (menggantikan keterangan lama pada panel masuk) -->
-                    <div class="lp-daftar-dua">
-                        <div class="lp-daftar-kotak lp-login-catatan" id="kotakPendaftaran">
-                            <div class="lp-daftar-kotak-kepala"><?= landing_ikon('school', 20) ?>
-                                <b>Pendaftaran Madrasah</b></div>
-                            <p class="mb0 kecil">Belum punya akun? Daftarkan madrasah Anda &mdash; isi identitas lembaga dan
-                                akun kepala madrasah, lalu tunggu persetujuan Admin aplikasi.</p>
-                            <a class="btn btn-emas btn-kecil btn-lebar mt8" href="daftar.php"
-                               id="btnPendaftaran"><?= landing_ikon('user', 16) ?> Pendaftaran Madrasah</a>
-                        </div>
-                        <div class="lp-daftar-kotak lp-login-catatan" id="kotakPendaftaranPenilai">
-                            <div class="lp-daftar-kotak-kepala"><?= landing_ikon('user', 20) ?>
-                                <b>Pendaftaran Penilai</b></div>
-                            <p class="mb0 kecil">Pengawas, Kabag, Kasie, Guru, atau Komite yang bertugas menilai?
-                                Daftarkan akun penilai &mdash; nama pengguna dan kata sandi tampil setelah mendaftar.</p>
-                            <a class="btn btn-emas btn-kecil btn-lebar mt8" href="daftar_penilai.php"
-                               id="btnPendaftaranPenilai"><?= landing_ikon('user', 16) ?> Pendaftaran Penilai</a>
-                        </div>
-                    </div>
+            <?php if ($galat !== ''): ?>
+                <div class="alert alert-err" id="galatMasuk"><?= e($galat) ?></div>
+            <?php endif; ?>
+
+            <form method="post" action="login.php#masuk" class="dp-form" autocomplete="on">
+                <?= csrf_field() ?>
+                <div class="dp-medan">
+                    <span class="dp-medan-ikon" aria-hidden="true"><?= ikon('guru', 18) ?></span>
+                    <input type="text" id="username" name="username" required autocomplete="username"
+                           placeholder="Nama pengguna" aria-label="Nama pengguna"
+                           value="<?= e($_POST['username'] ?? '') ?>">
                 </div>
-            </div>
-        </div>
+                <div class="dp-medan">
+                    <span class="dp-medan-ikon" aria-hidden="true"><?= ikon('kunci', 18) ?></span>
+                    <input type="password" id="password" name="password" required autocomplete="current-password"
+                           placeholder="Kata sandi" aria-label="Kata sandi">
+                    <button class="dp-mata" type="button" data-sandi aria-label="Tampilkan kata sandi" aria-pressed="false">
+                        <svg class="dp-mata-buka" viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2 12s3.6-6 10-6 10 6 10 6-3.6 6-10 6-10-6-10-6z"/>
+                            <circle cx="12" cy="12" r="2.6"/>
+                        </svg>
+                        <svg class="dp-mata-tutup" viewBox="0 0 24 24" width="18" height="18" fill="none"
+                             stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" hidden>
+                            <path d="M3 3l18 18"/>
+                            <path d="M10.6 6.2A10.9 10.9 0 0 1 12 6c6.4 0 10 6 10 6a17 17 0 0 1-3.1 3.7"/>
+                            <path d="M6.3 7.9A16.6 16.6 0 0 0 2 12s3.6 6 10 6a10.6 10.6 0 0 0 4.2-.8"/>
+                        </svg>
+                    </button>
+                </div>
 
-        <?php if ($stats): ?>
-            <div class="lp-stat">
-                <?php foreach ($stats as $st): ?>
-                    <div class="lp-stat-kotak lp-3d">
-                        <b><?= e($st['angka']) ?></b>
-                        <span><?= e($st['label']) ?></span>
-                    </div>
-                <?php endforeach; ?>
-            </div>
-        <?php endif; ?>
-    </div>
-</section>
+                <button class="btn btn-lebar dp-tombol" type="submit">Masuk</button>
+            </form>
 
-<!-- ================================ fitur ================================= -->
-<?php if ($fitur): ?>
-<section class="lp-sec" id="fitur">
-    <div class="lp-wrap">
-        <h2 class="lp-judul"><?= e(landing_teks('fitur_judul')) ?></h2>
-        <p class="lp-sub"><?= e(landing_teks('fitur_sub')) ?></p>
-        <div class="lp-grid lp-grid-4">
-            <?php foreach ($fitur as $f): ?>
-                <article class="card lp-kartu lp-3d">
-                    <span class="lp-kartu-ikon"><?= landing_ikon(landing_ikon_sah((string)$f['ikon']), 26) ?></span>
-                    <h3><?= e($f['judul']) ?></h3>
-                    <p><?= e($f['teks']) ?></p>
-                </article>
-            <?php endforeach; ?>
-        </div>
-    </div>
-</section>
-<?php endif; ?>
+            <p class="dp-lupa">Lupa kata sandi? Hubungi <b>Super Admin</b> aplikasi.</p>
 
-<!-- ============================== keunggulan ============================== -->
-<?php if ($unggulan): ?>
-<section class="lp-sec lp-alt" id="keunggulan">
-    <div class="lp-wrap">
-        <h2 class="lp-judul"><?= e(landing_teks('unggulan_judul')) ?></h2>
-        <p class="lp-sub"><?= e(landing_teks('unggulan_sub')) ?></p>
-        <div class="lp-grid lp-grid-3">
-            <?php foreach ($unggulan as $g): ?>
-                <article class="card lp-kartu lp-3d">
-                    <span class="lp-kartu-ikon"><?= landing_ikon(landing_ikon_sah((string)$g['ikon']), 26) ?></span>
-                    <h3><?= e($g['judul']) ?></h3>
-                    <p><?= e($g['teks']) ?></p>
-                </article>
-            <?php endforeach; ?>
-        </div>
-    </div>
-</section>
-<?php endif; ?>
-
-<!-- ================================ kontak ================================ -->
-<section class="lp-sec" id="kontak">
-    <div class="lp-wrap">
-        <h2 class="lp-judul"><?= e(landing_teks('kontak_judul')) ?></h2>
-        <p class="lp-sub"><?= e(landing_teks('kontak_sub')) ?></p>
-
-        <?php if ($terkirim): ?>
-            <div class="alert alert-ok">Pesan Anda sudah terkirim. Terima kasih.</div>
-        <?php endif; ?>
-
-        <div class="lp-kontak-grid">
-            <div class="card lp-kontak lp-3d">
-                <h3>Informasi Kontak</h3>
-                <?php if (trim(landing_teks('kontak_alamat')) !== ''): ?>
-                    <p class="lp-kontak-baris"><?= landing_ikon('lokasi', 18) ?><span><?= e(landing_teks('kontak_alamat')) ?></span></p>
-                <?php endif; ?>
-                <?php if (trim(landing_teks('kontak_telepon')) !== ''): ?>
-                    <p class="lp-kontak-baris"><?= landing_ikon('telepon', 18) ?><span><?= e(landing_teks('kontak_telepon')) ?></span></p>
-                <?php endif; ?>
-                <?php if (trim(landing_teks('kontak_email')) !== ''): ?>
-                    <p class="lp-kontak-baris"><?= landing_ikon('email', 18) ?><span><?= e(landing_teks('kontak_email')) ?></span></p>
-                <?php endif; ?>
-                <?php if (trim(landing_teks('kontak_jam')) !== ''): ?>
-                    <p class="lp-kontak-baris"><?= landing_ikon('clock', 18) ?><span><?= e(landing_teks('kontak_jam')) ?></span></p>
-                <?php endif; ?>
-                <p><?= e(landing_teks('kontak_ajakan')) ?></p>
-                <?php if ($waTautan !== ''): ?>
-                    <a class="btn btn-emas" href="<?= e($waTautan) ?>" target="_blank" rel="noopener noreferrer">
-                        <?= landing_ikon('chat', 18) ?> Hubungi lewat WhatsApp
-                    </a>
-                <?php endif; ?>
+            <div class="dp-pendaftaran">
+                <div class="dp-pendaftaran-kepala"><?= ikon('user', 16) ?> <b>Belum punya akun?</b></div>
+                <p>Hanya jabatan <b>selain pengawas</b> (Guru, Tendik, Komite, Kasie, Kabid/Yayasan) yang
+                    mendaftar sendiri. Akun <b>kepala madrasah</b> dan <b>pengawas</b> otomatis diambil dari
+                    data aplikasi Supervisi Guru.</p>
+                <a class="btn btn-ghost btn-kecil btn-lebar" href="daftar_penilai.php" id="btnPendaftaranPenilai">
+                    Pendaftaran Penilai
+                </a>
             </div>
 
-            <div class="card lp-kontak-pesan lp-3d">
-                <h3>Kirim Pesan</h3>
-                <?php if ($pesanGalat): ?>
-                    <div class="alert alert-err">
-                        <ul class="mb0"><?php foreach ($pesanGalat as $p): ?><li><?= e($p) ?></li><?php endforeach; ?></ul>
-                    </div>
-                <?php endif; ?>
-                <form method="post" action="login.php#kontak">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="aksi" value="pesan">
-                    <div class="form-2">
-                        <div><label for="pesan_nama">Nama</label>
-                            <input type="text" id="pesan_nama" name="nama" required value="<?= e($nilaiPesan['nama']) ?>"></div>
-                        <div><label for="pesan_kontak">Email / Nomor WhatsApp</label>
-                            <input type="text" id="pesan_kontak" name="kontak" required value="<?= e($nilaiPesan['kontak']) ?>"></div>
-                    </div>
-                    <div class="form-baris mt8">
-                        <label for="isiPesan">Pesan</label>
-                        <textarea id="isiPesan" name="pesan" required><?= e($nilaiPesan['pesan']) ?></textarea>
-                    </div>
-                    <div class="form-baris">
-                        <label for="captchaPesan">Pengaman: berapa <?= (int)$cap['a'] ?> + <?= (int)$cap['b'] ?> ?</label>
-                        <input type="text" id="captchaPesan" name="captcha" required inputmode="numeric" autocomplete="off">
-                    </div>
-                    <button class="btn" type="submit">Kirim Pesan</button>
-                    <p class="kecil mut mt8 mb0">Maksimal <?= LANDING_MAKS_SESI ?> pesan per sesi.</p>
-                </form>
-            </div>
+            <p class="dp-versi"><?= e(APP_NAME) ?> Versi <?= e(APP_VERSION) ?> &middot; <?= e(APP_SUB) ?></p>
+            <p class="dp-penulis">Dikembangkan oleh <?= e(APP_AUTHOR) ?> (<?= e(APP_AUTHOR_JABATAN) ?>)</p>
         </div>
-    </div>
-</section>
-
-<!-- ================================ footer =============================== -->
-<footer class="lp-foot">
-    <div class="lp-wrap lp-foot-isi">
-        <p class="mb0"><?= e(APP_NAME) ?> Versi <?= e(APP_VERSION) ?> &middot; <?= e(APP_SUB) ?></p>
-        <p class="mb0 kecil mut">Dikembangkan oleh <?= e(APP_AUTHOR) ?> (<?= e(APP_AUTHOR_JABATAN) ?>)</p>
-    </div>
-</footer>
+    </section>
+</div>
 
 <script src="assets/app.js?v=<?= e(APP_VERSION) ?>"></script>
 </body>

@@ -11,7 +11,7 @@
 
 define('APP_NAME', 'e-PKKM');
 define('APP_SUB', 'Penilaian Kinerja Kepala Madrasah');
-define('APP_VERSION', '1.10.0');
+define('APP_VERSION', '1.20.0');
 define('APP_AUTHOR', 'Supianto');
 define('APP_AUTHOR_JABATAN', 'Kepala MA. Sirojuth Tholibiin Mootilango');
 
@@ -119,8 +119,16 @@ define('PKKM_TEKS_PANJANG', 255);
 // (.doc / .xls lama sengaja TIDAK dipakai - layanan penyimpanan menolaknya.)
 define('DOK_EKSTENSI_GAMBAR', ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']);
 define('DOK_EKSTENSI_DOKUMEN', ['pdf', 'docx', 'xlsx', 'pptx', 'csv', 'txt', 'zip']);
-define('DOK_MAKS_GAMBAR', 15 * 1024 * 1024);   // 15 MB per berkas gambar
-define('DOK_MAKS_DOKUMEN', 50 * 1024 * 1024);  // 50 MB per berkas dokumen
-define('DOK_MAKS_PER_BUTIR', 5);               // maksimal 5 berkas per butir per tahun
+// v1.19.0 - batas ukuran DIPERKECIL menjadi 2 MB per berkas (permintaan pemilik:
+// "Pada unggah dokumen kepala madrasah batasi maksimal hanya 2MB").
+define('DOK_MAKS_BYTE', 2 * 1024 * 1024);      // 2 MB - batas SATU berkas (gambar maupun dokumen)
+define('DOK_MAKS_GAMBAR', DOK_MAKS_BYTE);
+define('DOK_MAKS_DOKUMEN', DOK_MAKS_BYTE);
+define('DOK_MAKS_PER_BUTIR', 5);               // maksimal 5 dokumen per butir per tahun (berkas + tautan)
 define('DOK_NAMA_MAKS', 160);                  // panjang nama berkas yang disimpan
 define('DOK_KOMENTAR_MAKS', 1000);             // panjang komentar penilai per butir
+// v1.19.0 - TAUTAN GOOGLE DRIVE sebagai alternatif unggah berkas (permintaan pemilik:
+// "sediakan fitur untuk memasukkan link google drive jika dokumennya sudah ada di google drive").
+define('DOK_TAUTAN_MAKS', 500);                // panjang tautan yang disimpan
+define('DOK_TAUTAN_NAMA', 'Dokumen Google Drive');   // nama bawaan bila judul tidak diisi
+define('DOK_TAUTAN_NAMA_MAKS', 90);            // panjang judul tautan
